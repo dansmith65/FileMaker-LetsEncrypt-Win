@@ -333,6 +333,9 @@ if ($PSCmdlet.ShouldProcess(
 
 	Write-Output "Import certificate via fmsadmin:"
 	& $fmsadmin certificate import $certPath -y
+	if (! $?) {
+		throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
+	}
 
 	<# Append the intermediary certificate to support older FMS before 15 #>
 	Add-Content $FMSPath'CStore\serverCustom.pem' (Get-Content $intermPath)
