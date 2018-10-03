@@ -356,6 +356,8 @@ if ($PSCmdlet.ShouldProcess(
 
 	<# Just in case server isn't configured to start automatically
 		(should add other services here, if necessary, like WPE) #>
-	Write-Output "Start FileMaker Server (if set to start automatically, this will produce error 10006)"
+	Write-Output "Start FileMaker Server"
 	& $fmsadmin start server
+	if ($LASTEXITCODE -eq 10006) {
+		Write-Output "(If server is set to start automatically, error 10006 is expected)"
 }
