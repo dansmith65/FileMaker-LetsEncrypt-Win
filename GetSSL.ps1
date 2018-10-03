@@ -149,6 +149,7 @@ if ($ScheduleTask) {
 		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail. Please verify this before continuing.",
 		"Schedule a task to renew the certificate every 80 days at $($Time)?"
 	)) {
+
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
 			-Argument "-ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:`$false`" | Out-File 'C:\Program Files\FileMaker\FileMaker Server\Data\Documents\GetSSL.log'"
@@ -186,7 +187,8 @@ if ($PSCmdlet.ShouldProcess(
 	"Replace FileMaker Server Certificate with one from Let's Encrypt?"
 	)) {
 
-	$domainAliases = @();	foreach ($domain in $Domains) {
+	$domainAliases = @();
+	foreach ($domain in $Domains) {
 		if ($domain -Match ",| ") {
 			throw "Domain cannot contain a comma or parameter; perhaps two domains were passed as a single string? Try removing quotes from the domains."
 		}
@@ -239,13 +241,16 @@ if ($PSCmdlet.ShouldProcess(
 
 
 	<# Loop through the array of domains and validate each one with LE #>
-	for ( $i=0; $i -lt $Domains.length; $i++ ) {
+	for ( $i=0; $i -lt $Domains.length; $i++ ) {
+
 		<# Create a UUID alias to use for our domain request #>
 		$domain = $Domains[$i]
 		$domainAlias = $domainAliases[$i]
-		Write-Output "Performing challenge for $domain with alias $domainAlias";
+		Write-Output "Performing challenge for $domain with alias $domainAlias";
+
 		<#Create an entry for us to use with these requests using the alias we just generated #>
-		New-ACMEIdentifier -Dns $domain -Alias $domainAlias;
+		New-ACMEIdentifier -Dns $domain -Alias $domainAlias;
+
 		<# Use ACMESharp to automatically create the correct files to use for validation with LE #>
 		$response = Complete-ACMEChallenge $domainAlias -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'FMWebSite'; SkipLocalWebConfig = $true } -Force
 
@@ -260,12 +265,15 @@ if ($PSCmdlet.ShouldProcess(
 		  * File Path: [.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
 		  * File Content: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0.H3URk7qFUvhyYzqJySfc9eM25RTDN7bN4pwil37Rgms]
 		  * MIME Type: [text/plain]------------------------------------
-		#>
+		#>
+
 		<# Let them know it's ready #>
 		Write-Output "Submit-ACMEChallenge"
-		Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
+		Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
+
 		<# Pause 10 seconds to wait for LE to validate our settings #>
-		Start-Sleep -s 10
+		Start-Sleep -s 10
+
 		<# Check the status #>
 		Write-Output "Update-ACMEIdentifier"
 		(Update-ACMEIdentifier $domainAlias -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}
@@ -285,7 +293,8 @@ if ($PSCmdlet.ShouldProcess(
 		HandlerCleanUpDate     :
 		SubmitDate             : 11/3/2016 12:34:48 AM
 		SubmitResponse         : {StatusCode, Headers, Links, RawContent...}
-		#>
+		#>
+
 	}
 
 
