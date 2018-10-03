@@ -17,11 +17,20 @@
 	necessary if installed in a non-default location.
 
 .PARAMETER ScheduleTask
-	Schedule a task via Windows Task Scheduler to renew the certificate every
-	80 days.
+	Schedule a task via Windows Task Scheduler to renew the certificate
+	automatically via Windows Task Scheduler.
+
+.PARAMETER IntervalDays
+	When scheduling a task, specify an interval to repeat on. Default is 63
+	days because:
+		- Let's Encrypt's recommendation is to renew when a certificate has a
+		  third of it's total lifetime left.
+		- if interval is divisible by 7, then it will always occur on the same
+		  day of the week
 
 .PARAMETER Time
-	When scheduling a task, specify a time of day to run it.
+	When scheduling a task, specify a time of day to run it. Can optionally
+	specify the exact date/time of the first schedule.
 
 .NOTES
 	File Name:   GetSSL.ps1
@@ -78,12 +87,22 @@
 .EXAMPLE
 	.\GetSSL.ps1 test.com user@test.com -ScheduleTask
 
-	Schedule a task via Windows Task Scheduler to renew the certificate every 80 days.
+	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days.
+
+.EXAMPLE
+	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -IntervalDays 70
+
+	Schedule a task via Windows Task Scheduler to renew the certificate every 70 days
 
 .EXAMPLE
 	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -Time 1:00am
 
-	Schedule a task via Windows Task Scheduler to renew the certificate every 80 days at 1:00am.
+	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days at 1:00am.
+
+.EXAMPLE
+	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -Time "1/1/2018 1:00am"
+
+	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days starting Jan 1st 2018 at 1:00am.
 #>
 
 
@@ -106,8 +125,12 @@ Param(
 	[switch] $ScheduleTask=$False,
 
 	[Parameter(ParameterSetName='ScheduleTask')]
+	[Alias('i')]
+	[string] $IntervalDays=63,
+
+	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('t')]
-	[string] $Time="4:00am"
+	[DateTime] $Time="4:00am"
 )
 
 
@@ -142,21 +165,23 @@ if (-not (Test-Administrator)) {
 	throw 'This script must be run as Administrator'
 }
 
-
 if ($ScheduleTask) {
+	if ($Time.Date -eq (Get-Date).Date) {
+		#Date contained in Time parameter was today, so add IntervalDays
+		$Time = $Time.AddDays($IntervalDays)
+	}
 	if ($PSCmdlet.ShouldProcess(
-		"Schedule a task to renew the certificate every 80 days at $Time", #NOTE: shown with -WhatIf parameter
-		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail. Please verify this before continuing.",
-		"Schedule a task to renew the certificate every 80 days at $($Time)?"
+		"Schedule a task to renew the certificate every $IntervalDays days starting $Time", #NOTE: shown with -WhatIf parameter
+		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
+		"Schedule a task to renew the certificate every $IntervalDays days starting $Time?"
 	)) {
-
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:`$false`" | Out-File 'C:\Program Files\FileMaker\FileMaker Server\Data\Documents\GetSSL.log'"
+			-Argument "-NoProfile -WindowStyle -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:0`" | Out-File 'C:\Program Files\FileMaker\FileMaker Server\Data\Documents\GetSSL.log'"
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
-			-DaysInterval 80 `
+			-DaysInterval $IntervalDays `
 			-At $Time
 
 		$Settings = New-ScheduledTaskSettingsSet `
@@ -360,4 +385,5 @@ if ($PSCmdlet.ShouldProcess(
 	& $fmsadmin start server
 	if ($LASTEXITCODE -eq 10006) {
 		Write-Output "(If server is set to start automatically, error 10006 is expected)"
+	}
 }
