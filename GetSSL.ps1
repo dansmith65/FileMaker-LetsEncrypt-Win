@@ -151,7 +151,7 @@ if ($ScheduleTask) {
 	)) {
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:`$false`""
+			-Argument "-ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:`$false`" | Out-File 'C:\Program Files\FileMaker\FileMaker Server\Data\Documents\GetSSL.log'"
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
