@@ -172,9 +172,9 @@ if ($ScheduleTask) {
 		$Time = $Time.AddDays($IntervalDays)
 	}
 	if ($PSCmdlet.ShouldProcess(
-		"Schedule a task to renew the certificate every $IntervalDays days starting $Time", #NOTE: shown with -WhatIf parameter
+		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}", #NOTE: shown with -WhatIf parameter
 		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
-		"Schedule a task to renew the certificate every $IntervalDays days starting $Time?"
+		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
 	)) {
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
