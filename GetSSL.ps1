@@ -192,7 +192,8 @@ if ($ScheduleTask) {
 			-StartWhenAvailable
 
 		$Principal = New-ScheduledTaskPrincipal `
-			-GroupId "BUILTIN\Administrators" `
+			-UserId $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+			-LogonType S4U `
 			-RunLevel Highest
 
 		$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
