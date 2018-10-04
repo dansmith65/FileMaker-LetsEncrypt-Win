@@ -178,7 +178,7 @@ if ($ScheduleTask) {
 	)) {
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:0 | Out-File `$env:temp\GetSSL.log"
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:0`" | Out-File `$env:temp\GetSSL.log"
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
