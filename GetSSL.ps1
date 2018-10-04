@@ -137,7 +137,7 @@ Param(
 <# Exit immediately on error #>
 $ErrorActionPreference = "Stop"
 
-$fmsadmin = $FMSPath + 'Database Server\fmsadmin.exe'
+$fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
 
 
 function Test-Administrator
@@ -248,7 +248,7 @@ if ($PSCmdlet.ShouldProcess(
 
 	<# ACMESharp creates a web.config that doesn't work so let's SkipLocalWebConfig and make our own
 		(it seems to think text/json is required) #>
-	$webConfigPath = $FMSPath + 'HTTPServer\conf\.well-known\acme-challenge\web.config'
+	$webConfigPath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge\web.config'
 
 	<# Create directory the file goes in #>
 	if (-not (Test-Path (Split-Path -Path $webConfigPath -Parent))) {
@@ -346,21 +346,21 @@ if ($PSCmdlet.ShouldProcess(
 
 
 	Write-Output "Export the private key"
-	$keyPath = $FMSPath + 'CStore\serverKey.pem'
+	$keyPath = Join-Path $FMSPath 'CStore\serverKey.pem'
 	if (Test-Path $keyPath) {
 		Remove-Item $keyPath
 	}
 	Get-ACMECertificate $certAlias -ExportKeyPEM $keyPath
 
 	Write-Output "Export the certificate"
-	$certPath = $FMSPath + 'CStore\crt.pem'
+	$certPath = Join-Path $FMSPath 'CStore\crt.pem'
 	if (Test-Path $certPath) {
 		Remove-Item $certPath
 	}
 	Get-ACMECertificate $certAlias -ExportCertificatePEM $certPath
 
 	Write-Output "Export the Intermediary"
-	$intermPath = $FMSPath + 'CStore\interm.pem'
+	$intermPath = Join-Path $FMSPath 'CStore\interm.pem'
 	if (Test-Path $intermPath) {
 		Remove-Item $intermPath
 	}
@@ -375,7 +375,7 @@ if ($PSCmdlet.ShouldProcess(
 	Write-Output "done`r`n"
 
 	<# Append the intermediary certificate to support older FMS before 15 #>
-	Add-Content $FMSPath'CStore\serverCustom.pem' (Get-Content $intermPath)
+	Add-Content (Join-Path $FMSPath 'CStore\serverCustom.pem') (Get-Content $intermPath)
 
 
 	Write-Output "Restart the FMS service:"
