@@ -148,8 +148,8 @@ function Test-Administrator
 
 
 <# Display user input #>
-Write-Output ""
 Get-Date
+Write-Output ""
 Write-Output ('  domains:   '+($Domains -join ', '))
 Write-Output "  email:     $Email"
 Write-Output "  FMSPath:   $FMSPath"
@@ -178,7 +178,7 @@ if ($ScheduleTask) {
 	)) {
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -WindowStyle -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:0`" | Out-File 'C:\Program Files\FileMaker\FileMaker Server\Data\Documents\GetSSL.log'"
+			-Argument "-NoProfile -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:0`" | Out-File 'C:\Program Files\FileMaker\FileMaker Server\Data\Documents\GetSSL.log'"
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
@@ -372,7 +372,7 @@ if ($PSCmdlet.ShouldProcess(
 	if (! $?) {
 		throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
 	}
-	Write-Output "done"
+	Write-Output "done`r`n"
 
 	<# Append the intermediary certificate to support older FMS before 15 #>
 	Add-Content $FMSPath'CStore\serverCustom.pem' (Get-Content $intermPath)
@@ -381,7 +381,7 @@ if ($PSCmdlet.ShouldProcess(
 	Write-Output "Restart the FMS service:"
 	net stop 'FileMaker Server'
 	net start 'FileMaker Server'
-	Write-Output "done"
+	Write-Output "done`r`n"
 
 	<# Just in case server isn't configured to start automatically
 		(should add other services here, if necessary, like WPE) #>
@@ -390,5 +390,5 @@ if ($PSCmdlet.ShouldProcess(
 	if ($LASTEXITCODE -eq 10006) {
 		Write-Output "(If server is set to start automatically, error 10006 is expected)"
 	}
-	Write-Output "done"
+	Write-Output "done`r`n"
 }
