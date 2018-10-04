@@ -149,6 +149,7 @@ function Test-Administrator
 
 <# Display user input #>
 Write-Output ""
+Get-Date
 Write-Output ('  domains:   '+($Domains -join ', '))
 Write-Output "  email:     $Email"
 Write-Output "  FMSPath:   $FMSPath"
@@ -370,20 +371,23 @@ if ($PSCmdlet.ShouldProcess(
 	if (! $?) {
 		throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
 	}
+	Write-Output "done"
 
 	<# Append the intermediary certificate to support older FMS before 15 #>
 	Add-Content $FMSPath'CStore\serverCustom.pem' (Get-Content $intermPath)
 
 
-	Write-Output "Restart the FMS service"
+	Write-Output "Restart the FMS service:"
 	net stop 'FileMaker Server'
 	net start 'FileMaker Server'
+	Write-Output "done"
 
 	<# Just in case server isn't configured to start automatically
 		(should add other services here, if necessary, like WPE) #>
-	Write-Output "Start FileMaker Server"
+	Write-Output "Start FileMaker Server:"
 	& $fmsadmin start server
 	if ($LASTEXITCODE -eq 10006) {
 		Write-Output "(If server is set to start automatically, error 10006 is expected)"
 	}
+	Write-Output "done"
 }
