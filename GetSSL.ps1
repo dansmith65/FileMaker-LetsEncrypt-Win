@@ -16,6 +16,13 @@
 	Path to your FileMaker Server directory, ending in a backslash. Only
 	necessary if installed in a non-default location.
 
+.PARAMETER Staging
+	Use Let's Encrypt Staging server and don't restart FileMaker Server service.
+	Use this option for testing/setup, but beware that the certificate will be
+	imported, so you would either need to restore the old certificate or
+	call this script again without this parameter to install a production
+	certificate.
+
 .PARAMETER Logging
 	Enable or disable logging. Default is to enable if not called from
 	PowerShell Integrated Scripting Environment (ISE).
