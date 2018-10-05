@@ -120,6 +120,9 @@ Param(
 	[Alias('p')]
 	[string] $FMSPath = 'C:\Program Files\FileMaker\FileMaker Server\',
 
+	[Parameter()]
+	[switch] $Staging=$False,
+
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('s')]
 	[switch] $ScheduleTask=$False,
@@ -153,6 +156,7 @@ Write-Output ""
 Write-Output ('  domains:   '+($Domains -join ', '))
 Write-Output "  email:     $Email"
 Write-Output "  FMSPath:   $FMSPath"
+Write-Output "  Staging:   $Staging"
 Write-Output ""
 
 
@@ -176,9 +180,10 @@ if ($ScheduleTask) {
 		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
 		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
 	)) {
+		$StagingParameterAsText = if ($Staging) {"-Staging"}
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' -Confirm:0`" | Out-File `$env:temp\GetSSL.log"
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`" | Out-File `$env:temp\GetSSL.log"
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
@@ -206,14 +211,29 @@ if ($ScheduleTask) {
 	exit
 }
 
+if (!($Staging)) {
+	<# either the first message is show, or both the second AND third #>
+	$messages = @(
+		<# verboseDescription: Textual description of the action to be performed. This is what will be displayed to the user for ActionPreference.Continue. (-WhatIf parameter will show this) #>
+		"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.",
 
+		<# verboseWarning: Textual query of whether the action should be performed, usually in the form of a question. This is what will be displayed to the user for ActionPreference.Inquire. #>
+		"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
 
-if ($PSCmdlet.ShouldProcess(
-	"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.", #NOTE: shown with -WhatIf parameter
-	"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
-	"Replace FileMaker Server Certificate with one from Let's Encrypt?"
-	)) {
+		<# caption: Caption of the window which may be displayed if the user is prompted whether or not to perform the action. caption may be displayed by some hosts, but not all.#>
+		"Replace FileMaker Server Certificate with one from Let's Encrypt?"
+	)
+} else {
+	$messages = @(
+		"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
 
+		"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
+
+		"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server?"
+	)
+}
+
+if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
 	$domainAliases = @();
 	foreach ($domain in $Domains) {
 		if ($domain -Match ",| ") {
@@ -235,11 +255,26 @@ if ($PSCmdlet.ShouldProcess(
 	Import-Module ACMESharp
 
 	<# Initialize the vault to either Live or Staging#>
-	if (!(Get-ACMEVault)) {
+	$Vault = Get-ACMEVault
+	if (!($Vault)) {
 		Write-Output "Initialize-ACMEVault"
-		Initialize-ACMEVault
+		if ($Staging) {
+			Initialize-ACMEVault -BaseService LetsEncrypt-STAGING
+		} else {
+			Initialize-ACMEVault
+		}
+	} else {
+		<# Make sure vault matches Staging parameter #>
+		if ($Vault.BaseUri.Contains('staging')) {
+			if (!($Staging)) {
+				Write-Output "Switch Vault from Staging to Production"
+				Initialize-ACMEVault -Force
+			}
+		} elseif ($Staging) {
+			Write-Output "Switch Vault from Production to Staging"
+			Initialize-ACMEVault -BaseService LetsEncrypt-STAGING -Force
+		}
 	}
-	#Initialize-ACMEVault -BaseURI https://acme-staging.api.letsencrypt.org/
 
 
 	Write-Output "Register contact info with LE"
@@ -379,16 +414,24 @@ if ($PSCmdlet.ShouldProcess(
 
 
 	Write-Output "Restart the FMS service:"
-	net stop 'FileMaker Server'
-	net start 'FileMaker Server'
+	if ($Staging) {
+		Write-Output "skipped because -Staging parameter was provided"
+	} else {
+		net stop 'FileMaker Server'
+		net start 'FileMaker Server'
+	}
 	Write-Output "done`r`n"
 
 	<# Just in case server isn't configured to start automatically
 		(should add other services here, if necessary, like WPE) #>
 	Write-Output "Start FileMaker Server:"
-	& $fmsadmin start server
-	if ($LASTEXITCODE -eq 10006) {
-		Write-Output "(If server is set to start automatically, error 10006 is expected)"
+	if ($Staging) {
+		Write-Output "skipped because -Staging parameter was provided"
+	} else {
+		& $fmsadmin start server
+		if ($LASTEXITCODE -eq 10006) {
+			Write-Output "(If server is set to start automatically, error 10006 is expected)"
+		}
 	}
 	Write-Output "done`r`n"
 }
