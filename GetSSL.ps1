@@ -16,6 +16,20 @@
 	Path to your FileMaker Server directory, ending in a backslash. Only
 	necessary if installed in a non-default location.
 
+.PARAMETER Logging
+	Enable or disable logging. Default is to enable if not called from
+	PowerShell Integrated Scripting Environment (ISE).
+
+.PARAMETER LogDirectory
+	Folder to put logs. Default is a folder named the same as this script in
+	a Documents directory that is a sibling to this scripts parent directory.
+	In other words: Documents directory when this script is in FMS Scripts
+	directory.
+
+.PARAMETER LogsToKeep
+	Number of log files to keep in LogDirectory. Oldest will be deleted if
+	there are more than this number.
+
 .PARAMETER ScheduleTask
 	Schedule a task via Windows Task Scheduler to renew the certificate
 	automatically via Windows Task Scheduler.
@@ -120,8 +134,13 @@ Param(
 	[Alias('p')]
 	[string] $FMSPath = 'C:\Program Files\FileMaker\FileMaker Server\',
 
-	[Parameter()]
 	[switch] $Staging=$False,
+
+	[switch] $Logging = -not $host.name.contains('ISE') ,
+
+	[int] $LogsToKeep = 50 ,
+
+	[string] $LogDirectory = "$(Split-Path $(Split-Path (Get-Variable MyInvocation -Scope 0).Value.MyCommand.Path))\Documents\$($MyInvocation.MyCommand.Name)",
 
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('s')]
@@ -140,6 +159,13 @@ Param(
 <# Exit immediately on error #>
 $ErrorActionPreference = "Stop"
 
+# START LOGGING ###############################################################
+if ( $Logging ) {
+	If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
+	Start-Transcript -Append -Path "$logDirectory\powershell $(Get-Date -uformat %Y-%m-%d_%H%M%S).log"
+	Write-Host
+}
+
 $fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
 
 
@@ -154,9 +180,14 @@ function Test-Administrator
 Get-Date
 Write-Output ""
 Write-Output ('  domains:   '+($Domains -join ', '))
-Write-Output "  email:     $Email"
-Write-Output "  FMSPath:   $FMSPath"
-Write-Output "  Staging:   $Staging"
+Write-Output "  email:        $Email"
+Write-Output "  FMSPath:      $FMSPath"
+Write-Output "  Staging:      $Staging"
+Write-Output "  Logging:      $Logging"
+if ( $Logging ) {
+Write-Output "  LogDirectory: $LogDirectory"
+Write-Output "  LogsToKeep:   $LogsToKeep"
+}
 Write-Output ""
 
 
@@ -436,3 +467,12 @@ if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
 	}
 	Write-Output "done`r`n"
 }
+
+
+# DELETE OLD LOGS #############################################################
+Write-Host "Delete old Log files, if necessary." -ForegroundColor Green
+Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
+Write-Host
+
+# STOP LOGGING ################################################################
+if ( $Logging ) { Stop-Transcript }
