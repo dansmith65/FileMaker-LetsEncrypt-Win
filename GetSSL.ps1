@@ -409,9 +409,10 @@ if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
 	}
 	Write-Output "done`r`n"
 
-	<# Append the intermediary certificate to support older FMS before 15 #>
+	Write-Output "Append the intermediary certificate:"
+	<# to support older FMS before 15 #>
 	Add-Content (Join-Path $FMSPath 'CStore\serverCustom.pem') (Get-Content $intermPath)
-
+	Write-Output "done`r`n"
 
 	Write-Output "Restart the FMS service:"
 	if ($Staging) {
