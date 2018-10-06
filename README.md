@@ -46,7 +46,7 @@ Thanks for figuring out the hard part David!
 
 
 
-## Docs
+## Options
 
 Once the script is downloaded, run this from PowerShell, while in the same directory as the script, to get all documentation on the script:
 
@@ -55,3 +55,5 @@ Get-Help .\GetSSL.ps1 -full
 ```
 
 (Or just view the GetSSL.ps1 file in a text editor)
+
+Consider using the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
