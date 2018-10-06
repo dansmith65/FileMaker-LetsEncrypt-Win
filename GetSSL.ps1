@@ -221,7 +221,7 @@ if ($ScheduleTask) {
 		$StagingParameterAsText = if ($Staging) {"-Staging"}
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`" | Out-File `$env:temp\GetSSL.log"
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`""
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
