@@ -166,321 +166,321 @@ Param(
 <# Exit immediately on error #>
 $ErrorActionPreference = "Stop"
 
-# START LOGGING ###############################################################
-if ( $Logging ) {
-	If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
-	Start-Transcript -Append -Path "$logDirectory\powershell $(Get-Date -uformat %Y-%m-%d_%H%M%S).log"
-	Write-Host
-	function Stop-Logging {
-		Write-Host "Delete old Log files, if necessary." -ForegroundColor Green
+Try {
+	if ( $Logging ) {
+		If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
+		Start-Transcript -Append -Path "$logDirectory\powershell $(Get-Date -uformat %Y-%m-%d_%H%M%S).log"
+		Write-Host
+	}
+
+	$fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
+
+
+	function Test-Administrator
+	{
+		$user = [Security.Principal.WindowsIdentity]::GetCurrent()
+		(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+	}
+
+
+	<# Display user input #>
+	Get-Date -Format F
+	Write-Output ""
+	Write-Output('  domains:      '+($Domains -join ', '))
+	Write-Output "  email:        $Email"
+	Write-Output "  FMSPath:      $FMSPath"
+	Write-Output "  Staging:      $Staging"
+	Write-Output "  Logging:      $Logging"
+	if ( $Logging ) {
+	Write-Output "  LogDirectory: $LogDirectory"
+	Write-Output "  LogsToKeep:   $LogsToKeep"
+	}
+	Write-Output ""
+
+
+	<# validate FMSPath #>
+	if (-not(Test-Path $fmsadmin)) {
+		throw "fmsadmin could not be found at: '$fmsadmin', please check the FMSPath parameter: '$FMSPath'"
+	}
+
+	<# Check to make sure we're running as admin #>
+	if (-not (Test-Administrator)) {
+		throw 'This script must be run as Administrator'
+	}
+
+	if ($ScheduleTask) {
+		if ($Time.Date -eq (Get-Date).Date) {
+			#Date contained in Time parameter was today, so add IntervalDays
+			$Time = $Time.AddDays($IntervalDays)
+		}
+		if ($PSCmdlet.ShouldProcess(
+			"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}", #NOTE: shown with -WhatIf parameter
+			"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
+			"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
+		)) {
+			$StagingParameterAsText = if ($Staging) {"-Staging"}
+			$Action = New-ScheduledTaskAction `
+				-Execute powershell.exe `
+				-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`""
+
+			$Trigger = New-ScheduledTaskTrigger `
+				-Daily `
+				-DaysInterval $IntervalDays `
+				-At $Time
+
+			$Settings = New-ScheduledTaskSettingsSet `
+				-AllowStartIfOnBatteries `
+				-DontStopIfGoingOnBatteries `
+				-ExecutionTimeLimit 00:10 `
+				-StartWhenAvailable
+
+			$Principal = New-ScheduledTaskPrincipal `
+				-UserId $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+				-LogonType S4U `
+				-RunLevel Highest
+
+			$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
+				-Description "Get an SSL certificate from Let's Encrypt and install it on FileMaker Server."
+
+			$TaskName = "GetSSL $Domains"
+
+			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
+		}
+		exit
+	}
+
+	if (!($Staging)) {
+		<# either the first message is show, or both the second AND third #>
+		$messages = @(
+			<# verboseDescription: Textual description of the action to be performed. This is what will be displayed to the user for ActionPreference.Continue. (-WhatIf parameter will show this) #>
+			"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.",
+
+			<# verboseWarning: Textual query of whether the action should be performed, usually in the form of a question. This is what will be displayed to the user for ActionPreference.Inquire. #>
+			"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
+
+			<# caption: Caption of the window which may be displayed if the user is prompted whether or not to perform the action. caption may be displayed by some hosts, but not all.#>
+			"Replace FileMaker Server Certificate with one from Let's Encrypt?"
+		)
+	} else {
+		$messages = @(
+			"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
+
+			"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
+
+			"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server?"
+		)
+	}
+
+	if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
+		$domainAliases = @();
+		foreach ($domain in $Domains) {
+			if ($domain -Match ",| ") {
+				throw "Domain cannot contain a comma or parameter; perhaps two domains were passed as a single string? Try removing quotes from the domains."
+			}
+			$domainAliases += "$domain"+[guid]::NewGuid().ToString()
+		}
+
+
+		if (!(Get-Module -Listavailable -Name ACMESharp)) {
+			Write-Output "Install ACMESharp"
+			# NOTE: the -Confirm:$false option doesn't prevent ALL confirmations,
+			# but it does prevent a few, which are most likely to only be
+			# required on the first run 
+			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false
+			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS
+		}
+		Write-Output "Import ACMESharp Module"
+		Import-Module ACMESharp
+
+		<# Initialize the vault to either Live or Staging#>
+		$Vault = Get-ACMEVault
+		if (!($Vault)) {
+			Write-Output "Initialize-ACMEVault"
+			if ($Staging) {
+				Initialize-ACMEVault -BaseService LetsEncrypt-STAGING
+			} else {
+				Initialize-ACMEVault
+			}
+		} else {
+			<# Make sure vault matches Staging parameter #>
+			if ($Vault.BaseUri.Contains('staging')) {
+				if (!($Staging)) {
+					Write-Output "Switch Vault from Staging to Production"
+					Initialize-ACMEVault -Force
+				}
+			} elseif ($Staging) {
+				Write-Output "Switch Vault from Production to Staging"
+				Initialize-ACMEVault -BaseService LetsEncrypt-STAGING -Force
+			}
+		}
+
+
+		Write-Output "Register contact info with LE"
+		New-ACMERegistration -Contacts mailto:$Email -AcceptTos
+
+
+		<# ACMESharp creates a web.config that doesn't work so let's SkipLocalWebConfig and make our own
+			(it seems to think text/json is required) #>
+		$webConfigPath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge\web.config'
+
+		<# Create directory the file goes in #>
+		if (-not (Test-Path (Split-Path -Path $webConfigPath -Parent))) {
+			Write-Output "Create acme-challenge directory"
+			New-Item -Path (Split-Path -Path $webConfigPath -Parent) -ItemType Directory
+		}
+
+		Write-Output "Create web.config file"
+	'<configuration>
+		<system.webServer>
+			<staticContent>
+				<mimeMap fileExtension="." mimeType="text/plain" />
+			</staticContent>
+		</system.webServer>
+	</configuration>' | Out-File -FilePath ($webConfigPath)
+
+
+
+		<# Loop through the array of domains and validate each one with LE #>
+		for ( $i=0; $i -lt $Domains.length; $i++ ) {
+
+			<# Create a UUID alias to use for our domain request #>
+			$domain = $Domains[$i]
+			$domainAlias = $domainAliases[$i]
+			Write-Output "Performing challenge for $domain with alias $domainAlias";
+
+			<#Create an entry for us to use with these requests using the alias we just generated #>
+			New-ACMEIdentifier -Dns $domain -Alias $domainAlias;
+
+			<# Use ACMESharp to automatically create the correct files to use for validation with LE #>
+			$response = Complete-ACMEChallenge $domainAlias -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'FMWebSite'; SkipLocalWebConfig = $true } -Force
+
+			<# Sample Response
+			== Manual Challenge Handler - HTTP ==
+			  * Handle Time: [1/12/2016 1:16:34 PM]
+			  * Challenge Token: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
+			To complete this Challenge please create a new file
+			under the server that is responding to the hostname
+			and path given with the following characteristics:
+			  * HTTP URL: [http://myserver.example.com/.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
+			  * File Path: [.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
+			  * File Content: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0.H3URk7qFUvhyYzqJySfc9eM25RTDN7bN4pwil37Rgms]
+			  * MIME Type: [text/plain]------------------------------------
+			#>
+
+			<# Let them know it's ready #>
+			Write-Output "Submit-ACMEChallenge"
+			Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
+
+			<# Pause 10 seconds to wait for LE to validate our settings #>
+			Start-Sleep -s 10
+
+			<# Check the status #>
+			Write-Output "Update-ACMEIdentifier"
+			(Update-ACMEIdentifier $domainAlias -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}
+
+			<# Good Response Sample
+			ChallengePart          : ACMESharp.Messages.ChallengePart
+			Challenge              : ACMESharp.ACME.HttpChallenge
+			Type                   : http-01
+			Uri                    : https://acme-v01.api.letsencrypt.org/acme/challenge/a7qPufJw0Wdk7-Icw6V3xDDlXj1Ag5CVr4aZRw2H27
+									 A/323393389
+			Token                  : CqAhe31xGDeaqzf01dPx2j9NUqsBVqT1LpQ_Rhx1GiE
+			Status                 : valid
+			OldChallengeAnswer     : [, ]
+			ChallengeAnswerMessage :
+			HandlerName            : manual
+			HandlerHandleDate      : 11/3/2016 12:33:16 AM
+			HandlerCleanUpDate     :
+			SubmitDate             : 11/3/2016 12:34:48 AM
+			SubmitResponse         : {StatusCode, Headers, Links, RawContent...}
+			#>
+
+		}
+
+
+
+		$certAlias = 'cert-'+[guid]::NewGuid().ToString()
+
+		<# Ready to get the certificate #>
+		Write-Output "New-ACMECertificate"
+		New-ACMECertificate $domainAliases[0] -Generate -AlternativeIdentifierRefs $domainAliases -Alias $certAlias
+
+		Write-Output "Submit-ACMECertificate"
+		Submit-ACMECertificate $certAlias
+
+		<# Pause 10 seconds to wait for LE to create the certificate #>
+		Start-Sleep -s 10
+
+		<# Check the status $certAlias #>
+		Write-Output "Update-ACMECertificate"
+		Update-ACMECertificate $certAlias
+
+		<# Look for a serial number #>
+
+
+		Write-Output "Export the private key"
+		$keyPath = Join-Path $FMSPath 'CStore\serverKey.pem'
+		if (Test-Path $keyPath) {
+			Remove-Item $keyPath
+		}
+		Get-ACMECertificate $certAlias -ExportKeyPEM $keyPath
+
+		Write-Output "Export the certificate"
+		$certPath = Join-Path $FMSPath 'CStore\crt.pem'
+		if (Test-Path $certPath) {
+			Remove-Item $certPath
+		}
+		Get-ACMECertificate $certAlias -ExportCertificatePEM $certPath
+
+		Write-Output "Export the Intermediary"
+		$intermPath = Join-Path $FMSPath 'CStore\interm.pem'
+		if (Test-Path $intermPath) {
+			Remove-Item $intermPath
+		}
+		Get-ACMECertificate $certAlias -ExportIssuerPEM $intermPath
+
+
+		Write-Output "Import certificate via fmsadmin:"
+		& $fmsadmin certificate import $certPath -y
+		if (! $?) {
+			throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
+		}
+		Write-Output "done`r`n"
+
+		Write-Output "Append the intermediary certificate:"
+		<# to support older FMS before 15 #>
+		Add-Content (Join-Path $FMSPath 'CStore\serverCustom.pem') (Get-Content $intermPath)
+		Write-Output "done`r`n"
+
+		Write-Output "Restart the FMS service:"
+		if ($Staging) {
+			Write-Output "skipped because -Staging parameter was provided"
+		} else {
+			net stop 'FileMaker Server'
+			net start 'FileMaker Server'
+		}
+		Write-Output "done`r`n"
+
+		<# Just in case server isn't configured to start automatically
+			(should add other services here, if necessary, like WPE) #>
+		Write-Output "Start FileMaker Server:"
+		if ($Staging) {
+			Write-Output "skipped because -Staging parameter was provided"
+		} else {
+			& $fmsadmin start server
+			if ($LASTEXITCODE -eq 10006) {
+				Write-Output "(If server is set to start automatically, error 10006 is expected)"
+			}
+		}
+		Write-Output "done`r`n"
+	}
+}
+
+Finally {
+	if ( $Logging ) {
+		Write-Host "`r`nDelete old Log files, if necessary."
 		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
 		Write-Host
 		Stop-Transcript
 	}
 }
-
-$fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
-
-
-function Test-Administrator
-{
-	$user = [Security.Principal.WindowsIdentity]::GetCurrent()
-	(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
-}
-
-
-<# Display user input #>
-Get-Date
-Write-Output ""
-Write-Output('  domains:      '+($Domains -join ', '))
-Write-Output "  email:        $Email"
-Write-Output "  FMSPath:      $FMSPath"
-Write-Output "  Staging:      $Staging"
-Write-Output "  Logging:      $Logging"
-if ( $Logging ) {
-Write-Output "  LogDirectory: $LogDirectory"
-Write-Output "  LogsToKeep:   $LogsToKeep"
-}
-Write-Output ""
-
-
-<# validate FMSPath #>
-if (-not(Test-Path $fmsadmin)) {
-	throw "fmsadmin could not be found at: '$fmsadmin', please check the FMSPath parameter: '$FMSPath'"
-}
-
-<# Check to make sure we're running as admin #>
-if (-not (Test-Administrator)) {
-	throw 'This script must be run as Administrator'
-}
-
-if ($ScheduleTask) {
-	if ($Time.Date -eq (Get-Date).Date) {
-		#Date contained in Time parameter was today, so add IntervalDays
-		$Time = $Time.AddDays($IntervalDays)
-	}
-	if ($PSCmdlet.ShouldProcess(
-		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}", #NOTE: shown with -WhatIf parameter
-		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
-		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
-	)) {
-		$StagingParameterAsText = if ($Staging) {"-Staging"}
-		$Action = New-ScheduledTaskAction `
-			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`""
-
-		$Trigger = New-ScheduledTaskTrigger `
-			-Daily `
-			-DaysInterval $IntervalDays `
-			-At $Time
-
-		$Settings = New-ScheduledTaskSettingsSet `
-			-AllowStartIfOnBatteries `
-			-DontStopIfGoingOnBatteries `
-			-ExecutionTimeLimit 00:10 `
-			-StartWhenAvailable
-
-		$Principal = New-ScheduledTaskPrincipal `
-			-UserId $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-			-LogonType S4U `
-			-RunLevel Highest
-
-		$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
-			-Description "Get an SSL certificate from Let's Encrypt and install it on FileMaker Server."
-
-		$TaskName = "GetSSL $Domains"
-
-		Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
-	}
-
-	if ( $Logging ) { Stop-Logging }
-	exit
-}
-
-if (!($Staging)) {
-	<# either the first message is show, or both the second AND third #>
-	$messages = @(
-		<# verboseDescription: Textual description of the action to be performed. This is what will be displayed to the user for ActionPreference.Continue. (-WhatIf parameter will show this) #>
-		"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.",
-
-		<# verboseWarning: Textual query of whether the action should be performed, usually in the form of a question. This is what will be displayed to the user for ActionPreference.Inquire. #>
-		"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
-
-		<# caption: Caption of the window which may be displayed if the user is prompted whether or not to perform the action. caption may be displayed by some hosts, but not all.#>
-		"Replace FileMaker Server Certificate with one from Let's Encrypt?"
-	)
-} else {
-	$messages = @(
-		"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
-
-		"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
-
-		"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server?"
-	)
-}
-
-if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
-	$domainAliases = @();
-	foreach ($domain in $Domains) {
-		if ($domain -Match ",| ") {
-			throw "Domain cannot contain a comma or parameter; perhaps two domains were passed as a single string? Try removing quotes from the domains."
-		}
-		$domainAliases += "$domain"+[guid]::NewGuid().ToString()
-	}
-
-
-	if (!(Get-Module -Listavailable -Name ACMESharp)) {
-		Write-Output "Install ACMESharp"
-		# NOTE: the -Confirm:$false option doesn't prevent ALL confirmations,
-		# but it does prevent a few, which are most likely to only be
-		# required on the first run 
-		Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false
-		Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS
-	}
-	Write-Output "Import ACMESharp Module"
-	Import-Module ACMESharp
-
-	<# Initialize the vault to either Live or Staging#>
-	$Vault = Get-ACMEVault
-	if (!($Vault)) {
-		Write-Output "Initialize-ACMEVault"
-		if ($Staging) {
-			Initialize-ACMEVault -BaseService LetsEncrypt-STAGING
-		} else {
-			Initialize-ACMEVault
-		}
-	} else {
-		<# Make sure vault matches Staging parameter #>
-		if ($Vault.BaseUri.Contains('staging')) {
-			if (!($Staging)) {
-				Write-Output "Switch Vault from Staging to Production"
-				Initialize-ACMEVault -Force
-			}
-		} elseif ($Staging) {
-			Write-Output "Switch Vault from Production to Staging"
-			Initialize-ACMEVault -BaseService LetsEncrypt-STAGING -Force
-		}
-	}
-
-
-	Write-Output "Register contact info with LE"
-	New-ACMERegistration -Contacts mailto:$Email -AcceptTos
-
-
-	<# ACMESharp creates a web.config that doesn't work so let's SkipLocalWebConfig and make our own
-		(it seems to think text/json is required) #>
-	$webConfigPath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge\web.config'
-
-	<# Create directory the file goes in #>
-	if (-not (Test-Path (Split-Path -Path $webConfigPath -Parent))) {
-		Write-Output "Create acme-challenge directory"
-		New-Item -Path (Split-Path -Path $webConfigPath -Parent) -ItemType Directory
-	}
-
-	Write-Output "Create web.config file"
-'<configuration>
-	<system.webServer>
-		<staticContent>
-			<mimeMap fileExtension="." mimeType="text/plain" />
-		</staticContent>
-	</system.webServer>
-</configuration>' | Out-File -FilePath ($webConfigPath)
-
-
-
-	<# Loop through the array of domains and validate each one with LE #>
-	for ( $i=0; $i -lt $Domains.length; $i++ ) {
-
-		<# Create a UUID alias to use for our domain request #>
-		$domain = $Domains[$i]
-		$domainAlias = $domainAliases[$i]
-		Write-Output "Performing challenge for $domain with alias $domainAlias";
-
-		<#Create an entry for us to use with these requests using the alias we just generated #>
-		New-ACMEIdentifier -Dns $domain -Alias $domainAlias;
-
-		<# Use ACMESharp to automatically create the correct files to use for validation with LE #>
-		$response = Complete-ACMEChallenge $domainAlias -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'FMWebSite'; SkipLocalWebConfig = $true } -Force
-
-		<# Sample Response
-		== Manual Challenge Handler - HTTP ==
-		  * Handle Time: [1/12/2016 1:16:34 PM]
-		  * Challenge Token: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
-		To complete this Challenge please create a new file
-		under the server that is responding to the hostname
-		and path given with the following characteristics:
-		  * HTTP URL: [http://myserver.example.com/.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
-		  * File Path: [.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
-		  * File Content: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0.H3URk7qFUvhyYzqJySfc9eM25RTDN7bN4pwil37Rgms]
-		  * MIME Type: [text/plain]------------------------------------
-		#>
-
-		<# Let them know it's ready #>
-		Write-Output "Submit-ACMEChallenge"
-		Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
-
-		<# Pause 10 seconds to wait for LE to validate our settings #>
-		Start-Sleep -s 10
-
-		<# Check the status #>
-		Write-Output "Update-ACMEIdentifier"
-		(Update-ACMEIdentifier $domainAlias -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}
-
-		<# Good Response Sample
-		ChallengePart          : ACMESharp.Messages.ChallengePart
-		Challenge              : ACMESharp.ACME.HttpChallenge
-		Type                   : http-01
-		Uri                    : https://acme-v01.api.letsencrypt.org/acme/challenge/a7qPufJw0Wdk7-Icw6V3xDDlXj1Ag5CVr4aZRw2H27
-								 A/323393389
-		Token                  : CqAhe31xGDeaqzf01dPx2j9NUqsBVqT1LpQ_Rhx1GiE
-		Status                 : valid
-		OldChallengeAnswer     : [, ]
-		ChallengeAnswerMessage :
-		HandlerName            : manual
-		HandlerHandleDate      : 11/3/2016 12:33:16 AM
-		HandlerCleanUpDate     :
-		SubmitDate             : 11/3/2016 12:34:48 AM
-		SubmitResponse         : {StatusCode, Headers, Links, RawContent...}
-		#>
-
-	}
-
-
-
-	$certAlias = 'cert-'+[guid]::NewGuid().ToString()
-
-	<# Ready to get the certificate #>
-	Write-Output "New-ACMECertificate"
-	New-ACMECertificate $domainAliases[0] -Generate -AlternativeIdentifierRefs $domainAliases -Alias $certAlias
-
-	Write-Output "Submit-ACMECertificate"
-	Submit-ACMECertificate $certAlias
-
-	<# Pause 10 seconds to wait for LE to create the certificate #>
-	Start-Sleep -s 10
-
-	<# Check the status $certAlias #>
-	Write-Output "Update-ACMECertificate"
-	Update-ACMECertificate $certAlias
-
-	<# Look for a serial number #>
-
-
-	Write-Output "Export the private key"
-	$keyPath = Join-Path $FMSPath 'CStore\serverKey.pem'
-	if (Test-Path $keyPath) {
-		Remove-Item $keyPath
-	}
-	Get-ACMECertificate $certAlias -ExportKeyPEM $keyPath
-
-	Write-Output "Export the certificate"
-	$certPath = Join-Path $FMSPath 'CStore\crt.pem'
-	if (Test-Path $certPath) {
-		Remove-Item $certPath
-	}
-	Get-ACMECertificate $certAlias -ExportCertificatePEM $certPath
-
-	Write-Output "Export the Intermediary"
-	$intermPath = Join-Path $FMSPath 'CStore\interm.pem'
-	if (Test-Path $intermPath) {
-		Remove-Item $intermPath
-	}
-	Get-ACMECertificate $certAlias -ExportIssuerPEM $intermPath
-
-
-	Write-Output "Import certificate via fmsadmin:"
-	& $fmsadmin certificate import $certPath -y
-	if (! $?) {
-		throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
-	}
-	Write-Output "done`r`n"
-
-	Write-Output "Append the intermediary certificate:"
-	<# to support older FMS before 15 #>
-	Add-Content (Join-Path $FMSPath 'CStore\serverCustom.pem') (Get-Content $intermPath)
-	Write-Output "done`r`n"
-
-	Write-Output "Restart the FMS service:"
-	if ($Staging) {
-		Write-Output "skipped because -Staging parameter was provided"
-	} else {
-		net stop 'FileMaker Server'
-		net start 'FileMaker Server'
-	}
-	Write-Output "done`r`n"
-
-	<# Just in case server isn't configured to start automatically
-		(should add other services here, if necessary, like WPE) #>
-	Write-Output "Start FileMaker Server:"
-	if ($Staging) {
-		Write-Output "skipped because -Staging parameter was provided"
-	} else {
-		& $fmsadmin start server
-		if ($LASTEXITCODE -eq 10006) {
-			Write-Output "(If server is set to start automatically, error 10006 is expected)"
-		}
-	}
-	Write-Output "done`r`n"
-}
-
-if ( $Logging ) { Stop-Logging }
