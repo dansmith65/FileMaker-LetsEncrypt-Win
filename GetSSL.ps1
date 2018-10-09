@@ -166,6 +166,18 @@ Param(
 <# Exit immediately on error #>
 $ErrorActionPreference = "Stop"
 
+function Backup-File {
+	Param(
+		[Parameter(Position=1)]
+		[string]$path,
+
+		[string]$BackupDirectory = $(Join-Path $FMSPath ('CStore\Backup\' + $Start.ToString("yyyy-MM-dd_HHmmss") +"\"))
+	)
+	If ( -not (Test-Path $BackupDirectory) ) { New-Item -ItemType directory -Path $BackupDirectory | Out-Null }
+	Write-Output "backing up $(Split-Path $path -Leaf) to $BackupDirectory"
+	Copy-Item $path $BackupDirectory
+}
+
 Try {
 	<# Save start date/time so it can be accessed repeatedly throughout the script #>
 	$Start = Get-Date
@@ -424,6 +436,7 @@ Try {
 		Write-Output "Export the private key"
 		$keyPath = Join-Path $FMSPath 'CStore\serverKey.pem'
 		if (Test-Path $keyPath) {
+			Backup-File $keyPath
 			Remove-Item $keyPath
 		}
 		Get-ACMECertificate $certAlias -ExportKeyPEM $keyPath
@@ -431,6 +444,7 @@ Try {
 		Write-Output "Export the certificate"
 		$certPath = Join-Path $FMSPath 'CStore\crt.pem'
 		if (Test-Path $certPath) {
+			Backup-File $certPath
 			Remove-Item $certPath
 		}
 		Get-ACMECertificate $certAlias -ExportCertificatePEM $certPath
@@ -438,10 +452,15 @@ Try {
 		Write-Output "Export the Intermediary"
 		$intermPath = Join-Path $FMSPath 'CStore\interm.pem'
 		if (Test-Path $intermPath) {
+			Backup-File $intermPath
 			Remove-Item $intermPath
 		}
 		Get-ACMECertificate $certAlias -ExportIssuerPEM $intermPath
 
+		$serverCustomPath = Join-Path $FMSPath 'CStore\serverCustom.pem'
+		if (Test-Path $intermPath) {
+			Backup-File $serverCustomPath
+		}
 
 		Write-Output "Import certificate via fmsadmin:"
 		& $fmsadmin certificate import $certPath -y
@@ -463,7 +482,7 @@ Try {
 
 		Write-Output "Append the intermediary certificate:"
 		<# to support older FMS before 15 #>
-		Add-Content (Join-Path $FMSPath 'CStore\serverCustom.pem') (Get-Content $intermPath)
+		Add-Content $serverCustomPath (Get-Content $intermPath)
 		Write-Output "done`r`n"
 
 		Write-Output "Restart the FMS service:"
