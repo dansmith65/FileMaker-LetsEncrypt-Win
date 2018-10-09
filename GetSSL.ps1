@@ -167,9 +167,12 @@ Param(
 $ErrorActionPreference = "Stop"
 
 Try {
+	<# Save start date/time so it can be accessed repeatedly throughout the script #>
+	$Start = Get-Date
+
 	if ( $Logging ) {
 		If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
-		Start-Transcript -Append -Path "$logDirectory\powershell $(Get-Date -uformat %Y-%m-%d_%H%M%S).log"
+		Start-Transcript -Append -Path "$logDirectory\powershell $($Start.ToString("yyyy-MM-dd_HHmmss")).log"
 		Write-Host
 	}
 
@@ -184,7 +187,7 @@ Try {
 
 
 	<# Display user input #>
-	Get-Date -Format F
+	Write-Output $Start.ToString("F")
 	Write-Output ""
 	Write-Output('  domains:      '+($Domains -join ', '))
 	Write-Output "  email:        $Email"
@@ -209,7 +212,7 @@ Try {
 	}
 
 	if ($ScheduleTask) {
-		if ($Time.Date -eq (Get-Date).Date) {
+		if ($Time.Date -eq $Start.Date) {
 			#Date contained in Time parameter was today, so add IntervalDays
 			$Time = $Time.AddDays($IntervalDays)
 		}
