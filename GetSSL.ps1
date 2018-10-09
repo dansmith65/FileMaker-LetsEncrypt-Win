@@ -171,6 +171,12 @@ if ( $Logging ) {
 	If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
 	Start-Transcript -Append -Path "$logDirectory\powershell $(Get-Date -uformat %Y-%m-%d_%H%M%S).log"
 	Write-Host
+	function Stop-Logging {
+		Write-Host "Delete old Log files, if necessary." -ForegroundColor Green
+		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
+		Write-Host
+		Stop-Transcript
+	}
 }
 
 $fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
@@ -246,6 +252,8 @@ if ($ScheduleTask) {
 
 		Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
 	}
+
+	if ( $Logging ) { Stop-Logging }
 	exit
 }
 
@@ -475,11 +483,4 @@ if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
 	Write-Output "done`r`n"
 }
 
-
-# DELETE OLD LOGS #############################################################
-Write-Host "Delete old Log files, if necessary." -ForegroundColor Green
-Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
-Write-Host
-
-# STOP LOGGING ################################################################
-if ( $Logging ) { Stop-Transcript }
+if ( $Logging ) { Stop-Logging }
