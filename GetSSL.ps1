@@ -456,8 +456,7 @@ Try {
 		if ($Staging) {
 			Write-Output "skipped because -Staging parameter was provided"
 		} else {
-			net stop 'FileMaker Server'
-			net start 'FileMaker Server'
+			Restart-Service "FileMaker Server"
 		}
 		Write-Output "done`r`n"
 
