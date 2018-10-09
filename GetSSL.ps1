@@ -446,7 +446,18 @@ Try {
 		Write-Output "Import certificate via fmsadmin:"
 		& $fmsadmin certificate import $certPath -y
 		if (! $?) {
-			throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
+			if ($LASTEXITCODE -eq 10502) {
+				Write-Output "Server might not have been running, trying to start it..."
+				& $fmsadmin start server
+				if (! $?) {
+					throw ("failed to start fmssadmin, error code " + $LASTEXITCODE)
+				} else {
+					& $fmsadmin certificate import $certPath -y
+					if (! $?) {throw ("fmsadmin certificate import error code " + $LASTEXITCODE)}
+				}
+			} else {
+				throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
+			}
 		}
 		Write-Output "done`r`n"
 
