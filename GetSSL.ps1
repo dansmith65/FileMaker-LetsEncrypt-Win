@@ -192,7 +192,7 @@ function Test-Administrator
 <# Display user input #>
 Get-Date
 Write-Output ""
-Write-Output ('  domains:   '+($Domains -join ', '))
+Write-Output('  domains:      '+($Domains -join ', '))
 Write-Output "  email:        $Email"
 Write-Output "  FMSPath:      $FMSPath"
 Write-Output "  Staging:      $Staging"
