@@ -469,7 +469,7 @@ Try {
 				Write-Output "Server might not have been running, trying to start it..."
 				& $fmsadmin start server
 				if (! $?) {
-					throw ("failed to start fmssadmin, error code " + $LASTEXITCODE)
+					throw ("failed to start fmsadmin, error code " + $LASTEXITCODE)
 				} else {
 					& $fmsadmin certificate import $certPath -y
 					if (! $?) {throw ("fmsadmin certificate import error code " + $LASTEXITCODE)}
@@ -483,6 +483,11 @@ Try {
 		Write-Output "Append the intermediary certificate:"
 		<# to support older FMS before 15 #>
 		Add-Content $serverCustomPath (Get-Content $intermPath)
+		Write-Output "done`r`n"
+
+		Write-Output "Stop FileMaker Server:"
+		& $fmsadmin stop server -y
+		if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		Write-Output "done`r`n"
 
 		Write-Output "Restart the FMS service:"
