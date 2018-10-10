@@ -488,6 +488,7 @@ Try {
 			Write-Output "skipped because -Staging parameter was provided"
 		} else {
 			$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
+			$FilesWereOpen = & $fmsadmin list files
 			& $fmsadmin stop server -y
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		}
@@ -515,6 +516,10 @@ Try {
 				<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes processes running the same bit depth as PowerShell #>
 				Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
 				& $fmsadmin start wpe
+			}
+			if ($FilesWereOpen -and -not(& $fmsadmin list files)) {
+				Write-Output "open files because they were open before FMS was stopped, but aren't now:"
+				& $fmsadmin open
 			}
 		}
 		Write-Output "done`r`n"
