@@ -75,7 +75,7 @@ Before replacing any files in the CStore directory, they are backed up in a sub-
 
 ```powershell
 Remove-Item "C:\Program Files\FileMaker\FileMaker Server\CStore\serverKey.pem"
-fmsadmin certificate import "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverCustom.pem" -y
+fmsadmin certificate import "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverCustom.pem" --keyfile "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverKey.pem" -y
 ```
 
 
