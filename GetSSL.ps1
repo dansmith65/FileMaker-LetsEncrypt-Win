@@ -484,8 +484,13 @@ Try {
 		Write-Output "done`r`n"
 
 		Write-Output "Stop FileMaker Server:"
-		& $fmsadmin stop server -y
-		if (! $?) { throw ("error code " + $LASTEXITCODE) }
+		if ($Staging) {
+			Write-Output "skipped because -Staging parameter was provided"
+		} else {
+			$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
+			& $fmsadmin stop server -y
+			if (! $?) { throw ("error code " + $LASTEXITCODE) }
+		}
 		Write-Output "done`r`n"
 
 		Write-Output "Restart the FMS service:"
@@ -505,6 +510,11 @@ Try {
 			& $fmsadmin start server
 			if ($LASTEXITCODE -eq 10006) {
 				Write-Output "(If server is set to start automatically, error 10006 is expected)"
+			}
+			if ($WPEWasRunning -and -not(Get-Process fmscwpc -ErrorAction:Ignore)) {
+				<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes processes running the same bit depth as PowerShell #>
+				Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
+				& $fmsadmin start wpe
 			}
 		}
 		Write-Output "done`r`n"
