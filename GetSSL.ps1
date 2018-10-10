@@ -178,6 +178,12 @@ function Backup-File {
 	Copy-Item $path $BackupDirectory
 }
 
+function Test-Administrator	{
+	$user = [Security.Principal.WindowsIdentity]::GetCurrent()
+	(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+
 Try {
 	<# Save start date/time so it can be accessed repeatedly throughout the script #>
 	$Start = Get-Date
@@ -189,14 +195,6 @@ Try {
 	}
 
 	$fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
-
-
-	function Test-Administrator
-	{
-		$user = [Security.Principal.WindowsIdentity]::GetCurrent()
-		(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
-	}
-
 
 	<# Display user input #>
 	Write-Output $Start.ToString("F")
