@@ -250,6 +250,27 @@ Try {
 		throw 'This script must be run as Administrator'
 	}
 
+	<# Server must be started to import a certificate or confirm access #>
+	if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
+		Write-Output "FileMaker Server process was not running, it will be started now"
+		& $fmsadmin start server
+		if (! $?) { throw ("failed to start server, error code " + $LASTEXITCODE) }
+	}
+
+	Write-Host "Confirming access to fmsadmin.exe:"
+	$FMAccessConfirmed = Confirm-FMSAccess
+	if (-not ($FMAccessConfirmed)) {
+		if (-not ($PSCmdlet.ShouldProcess(
+				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
+				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
+				"Continue?"
+			))) {
+			exit
+		}
+	} else {
+		Write-Host "confirmed"
+	}
+
 	if ($ScheduleTask) {
 		if ($Time.Date -eq $Start.Date) {
 			#Date contained in Time parameter was today, so add IntervalDays
@@ -289,27 +310,6 @@ Try {
 			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
 		}
 		exit
-	}
-
-	<# Server must be started to import a certificate #>
-	if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
-		Write-Output "FileMaker Server process was not running, it will be started now"
-		& $fmsadmin start server
-		if (! $?) { throw ("failed to start server, error code " + $LASTEXITCODE) }
-	}
-
-	Write-Host "Confirming access to fmsadmin.exe:"
-	$FMAccessConfirmed = Confirm-FMSAccess
-	if (-not ($FMAccessConfirmed)) {
-		if (-not ($PSCmdlet.ShouldProcess(
-				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
-				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
-				"Continue?"
-			))) {
-			exit
-		}
-	} else {
-		Write-Host "confirmed"
 	}
 
 	if (!($Staging)) {
