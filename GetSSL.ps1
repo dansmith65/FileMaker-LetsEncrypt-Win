@@ -260,11 +260,13 @@ Try {
 	Write-Host "Confirming access to fmsadmin.exe:"
 	$FMAccessConfirmed = Confirm-FMSAccess
 	if (-not ($FMAccessConfirmed)) {
+		Write-Host "no access!"
 		if (-not ($PSCmdlet.ShouldProcess(
 				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
 				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
 				"Continue?"
-			))) {
+			)))
+		{
 			exit
 		}
 	} else {
