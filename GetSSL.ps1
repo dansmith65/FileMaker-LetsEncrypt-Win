@@ -178,6 +178,35 @@ function Backup-File {
 	Copy-Item $path $BackupDirectory
 }
 
+function Confirm-FMSAccess {
+<#
+	.SYNOPSIS
+		Determine if user has to enter username and password to perform fmsadmin.exe
+
+	.OUTPUTS
+		Boolean $true if user can access fmsadmin.exe
+#>
+	<# Future TODO: add username and password parameters #>
+
+	$Process = Start-Process -FilePath $fmsadmin -ArgumentList 'list files' -PassThru -WindowStyle Hidden
+	try {
+		Wait-Process -InputObject $Process -Timeout 3 -ErrorAction Stop
+		if ($Process.ExitCode) {
+			if ($Process.ExitCode -eq 10502) {
+				Write-Debug "Error code 10502 likely means the server was not started"
+			}
+			return $false
+		}
+		return $true
+	}
+	catch {
+		# If process exceeded timeout, assume it asked user for credentials, but since the window was hidden, user
+		# could not see/enter them, therefor they don't have access to fmsadmin.exe without providing credentials.
+		$Process | Stop-Process -Force
+		return $false
+	}
+}
+
 function Test-Administrator	{
 	$user = [Security.Principal.WindowsIdentity]::GetCurrent()
 	(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
@@ -267,6 +296,19 @@ Try {
 		Write-Output "FileMaker Server process was not running, it will be started now"
 		& $fmsadmin start server
 		if (! $?) { throw ("failed to start server, error code " + $LASTEXITCODE) }
+	}
+
+	Write-Host "Confirming access to fmsadmin.exe:"
+	if (-not (Confirm-FMSAccess)) {
+		if (-not ($PSCmdlet.ShouldProcess(
+				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
+				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
+				"Continue?"
+			))) {
+			exit
+		}
+	} else {
+		Write-Host "confirmed"
 	}
 
 	if (!($Staging)) {
@@ -525,6 +567,9 @@ Finally {
 		Write-Host "`r`nDelete old Log files, if necessary."
 		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
 		Write-Host
-		Stop-Transcript
+		Try {
+			Stop-Transcript | Out-Null
+		}
+		Catch [System.InvalidOperationException]{}
 	}
 }
