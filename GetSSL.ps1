@@ -262,6 +262,13 @@ Try {
 		exit
 	}
 
+	<# Server must be started to import a certificate #>
+	if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
+		Write-Output "FileMaker Server process was not running, it will be started now"
+		& $fmsadmin start server
+		if (! $?) { throw ("failed to start server, error code " + $LASTEXITCODE) }
+	}
+
 	if (!($Staging)) {
 		<# either the first message is show, or both the second AND third #>
 		$messages = @(
@@ -462,20 +469,7 @@ Try {
 
 		Write-Output "Import certificate via fmsadmin:"
 		& $fmsadmin certificate import $certPath -y
-		if (! $?) {
-			if ($LASTEXITCODE -eq 10502) {
-				Write-Output "Server might not have been running, trying to start it..."
-				& $fmsadmin start server
-				if (! $?) {
-					throw ("failed to start fmsadmin, error code " + $LASTEXITCODE)
-				} else {
-					& $fmsadmin certificate import $certPath -y
-					if (! $?) {throw ("fmsadmin certificate import error code " + $LASTEXITCODE)}
-				}
-			} else {
-				throw ("fmsadmin certificate import error code " + $LASTEXITCODE)
-			}
-		}
+		if (! $?) { throw ("fmsadmin certificate import error code " + $LASTEXITCODE) }
 		Write-Output "done`r`n"
 
 		Write-Output "Append the intermediary certificate:"
