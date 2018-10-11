@@ -299,7 +299,8 @@ Try {
 	}
 
 	Write-Host "Confirming access to fmsadmin.exe:"
-	if (-not (Confirm-FMSAccess)) {
+	$FMAccessConfirmed = Confirm-FMSAccess
+	if (-not ($FMAccessConfirmed)) {
 		if (-not ($PSCmdlet.ShouldProcess(
 				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
 				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
@@ -524,7 +525,11 @@ Try {
 			Write-Output "skipped because -Staging parameter was provided"
 		} else {
 			$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
-			$FilesWereOpen = & $fmsadmin list files
+			if ($FMAccessConfirmed) {
+				<# Only run this code if user will not be prompted for user/pass since this method
+				   of calling fmsadmin does not allow them to enter their user/pass #>
+				$FilesWereOpen = & $fmsadmin list files
+			}
 			& $fmsadmin stop server -y
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		}
