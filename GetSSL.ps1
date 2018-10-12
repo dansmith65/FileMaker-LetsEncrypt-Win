@@ -259,12 +259,20 @@ Try {
 		if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
 			throw ("server process still not running after starting it; check FileMaker logs to see what's wrong")
 		}
+		<# Sometimes authentication fails right after starting server; trigger that failure here #>
+		Confirm-FMSAccess
 	}
 
 	Write-Host "Confirming access to fmsadmin.exe:"
 	$FMAccessConfirmed = Confirm-FMSAccess
 	if (-not ($FMAccessConfirmed)) {
-		Write-Host "no access!"
+		<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
+		   authentication, check again to be sure it's for real.
+		   https://community.filemaker.com/message/803496 #>
+		$FMAccessConfirmed = Confirm-FMSAccess
+	}
+	if (-not ($FMAccessConfirmed)) {
+		Write-Host "no access!`r`n"
 		if (-not ($PSCmdlet.ShouldProcess(
 				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
 				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
@@ -274,7 +282,7 @@ Try {
 			exit
 		}
 	} else {
-		Write-Host "confirmed"
+		Write-Host "confirmed`r`n"
 	}
 
 	if ($ScheduleTask) {
@@ -555,8 +563,7 @@ Try {
 		}
 		Write-Output "done`r`n"
 
-		<# Just in case server isn't configured to start automatically
-			(should add other services here, if necessary, like WPE) #>
+		<# Just in case server isn't configured to start automatically #>
 		Write-Output "Start FileMaker Server:"
 		if ($Staging) {
 			Write-Output "skipped because -Staging parameter was provided"
@@ -570,9 +577,20 @@ Try {
 				Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
 				& $fmsadmin start wpe
 			}
-			if ($FilesWereOpen -and -not(& $fmsadmin list files)) {
-				Write-Output "open files because they were open before FMS was stopped, but aren't now:"
-				cmd /c $fmsadmin open
+			if ($FilesWereOpen) {
+				<# Confirm FMAccess again, since it can asks for a password again after starting
+				   server. Do it twice; first time will likely fail, second time should succeed.
+				   https://community.filemaker.com/thread/191306 #>
+				Confirm-FMSAccess | Out-Null
+				if (Confirm-FMSAccess) {
+					Write-Output "check if files are open"
+					<# NOTE: If fmsadmin ask for a user/pass here, the user will not see the
+					   request, will not be able to enter them, and the script will hang. #>
+					if(-not(& cmd /c $fmsadmin list files)) {
+						Write-Output "open files because they were open before FMS was stopped, but aren't now:"
+						cmd /c $fmsadmin open
+					}
+				}
 			}
 		}
 		Write-Output "done`r`n"
