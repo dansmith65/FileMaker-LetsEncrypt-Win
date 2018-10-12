@@ -517,7 +517,13 @@ Try {
 		}
 
 		Write-Output "Import certificate via fmsadmin:"
-		& $fmsadmin certificate import $certPath -y
+		<# NOTE: use this method of calling fmsadmin whenever it's possible for it to ask user for
+		   input. Otherwise, just call it directly. Note that this call has two paths which must be
+		   quoted, so the syntax for escaping quotes is more complicated than if there is only one
+		   path, like when stopping the server
+		   https://community.filemaker.com/thread/191306
+		#>
+		cmd /c "`"$fmsadmin`" certificate import `"$certPath`" -y"
 		if (! $?) { throw ("fmsadmin certificate import error code " + $LASTEXITCODE) }
 		Write-Output "done`r`n"
 
@@ -536,7 +542,7 @@ Try {
 				   of calling fmsadmin does not allow them to enter their user/pass #>
 				$FilesWereOpen = & $fmsadmin list files
 			}
-			& $fmsadmin stop server -y
+			cmd /c $fmsadmin stop server -y
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		}
 		Write-Output "done`r`n"
@@ -566,7 +572,7 @@ Try {
 			}
 			if ($FilesWereOpen -and -not(& $fmsadmin list files)) {
 				Write-Output "open files because they were open before FMS was stopped, but aren't now:"
-				& $fmsadmin open
+				cmd /c $fmsadmin open
 			}
 		}
 		Write-Output "done`r`n"
