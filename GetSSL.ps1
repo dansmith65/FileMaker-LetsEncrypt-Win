@@ -449,7 +449,7 @@ Try {
 			Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
 
 			Write-Output "Update-ACMEIdentifier: Wait for LE to validate settings"
-			$timeout = new-timespan -Minutes 1
+			$timeout = New-TimeSpan -Minutes 1
 			$sw = [diagnostics.stopwatch]::StartNew()
 			do {
 				<# I tested with 1ms sleep and it was valid on the first iteration,
@@ -485,7 +485,7 @@ Try {
 		Submit-ACMECertificate $certAlias
 
 		Write-Output "Update-ACMECertificate: Wait for LE to create the certificate"
-		$timeout = new-timespan -Minutes 1
+		$timeout = New-TimeSpan -Minutes 1
 		$sw = [diagnostics.stopwatch]::StartNew()
 		do {
 			Start-Sleep -Seconds 1
@@ -499,7 +499,7 @@ Try {
 			Write-Host -NoNewline "."
 		}
 		until ($issuerSerialNumber)
-		Write-Output "done`r`n"
+		Write-Output "`r`ndone`r`n"
 
 
 		Write-Output "Export the private key"
