@@ -41,7 +41,7 @@ Thanks for figuring out the hard part David!
 
    1. Add a group name that is allowed to access the Admin Console and run the script as a user that belongs to the group.
    2. Hard-code the username and password into this script. (less secure)  
-      Add "-u username -p password" at the end of the line containing: `fmsadmin certificate import`
+      Add "-u youruser -p yourpass" at the end of any line containing `$fmsadmin`, that requires authentication (import certificate, list files, stop server, open).
 
 
 
@@ -55,15 +55,13 @@ To view it the "PowerShell Way", you can use Get-Help like:
 Get-Help .\GetSSL.ps1 -full
 ```
 
-Consider using the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
-
 
 
 ## Staging
 
 I won't duplicate what is already said about the `-Staging` parameter in the official help docs but I do want to add to it. Let's Encrypt service imposes [Rate Limits](https://letsencrypt.org/docs/rate-limits/), which are less restrictive on their staging environment. While developing this script (and before I added this parameter) I repeatedly tested with the same domain and quickly hit the limit of 5 identical certificate requests per week. While this won't pertain to most people, I do want to point out that if you are doing testing, you _should_ use the `-Staging` parameter.
 
-Using this parameter is a great way of doing the initial setup/testing as well. It allows you to go through all the steps without worrying about Rate Limits or your server being restarted. Common issues like permissions to call fmsadmin.exe without having to type a user/password can be resolved before doing a final install. Since the existing certificate is backed up before being replaced, you could always restore to existing configuration, if needed.
+Using this parameter is a great way of doing the initial setup/testing as well. It allows you to go through all the steps without worrying about Rate Limits or your server being restarted. Common issues like permissions to call fmsadmin.exe without having to type a user/pass can be resolved before doing a final install. Since the existing certificate is backed up before being replaced, you could always restore to existing configuration, if needed.
 
 
 
@@ -71,12 +69,14 @@ Using this parameter is a great way of doing the initial setup/testing as well. 
 
 Before replacing any files in the CStore directory, they are backed up in a sub-folder with the current date/time and no backups are ever overwritten or deleted by this script. If you need to restore a previously installed certificate, you can do it with a command like this:
 
-(make sure to use the actual path to the backup you want to restore; the code below is an example for a backup taken at the time of writing this documentation)
-
 ```powershell
 Remove-Item "C:\Program Files\FileMaker\FileMaker Server\CStore\serverKey.pem"
-fmsadmin certificate import "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverCustom.pem" --keyfile "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverKey.pem" -y
+fmsadmin certificate import `
+    "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverCustom.pem" `
+    --keyfile "C:\Program Files\FileMaker\FileMaker Server\CStore\Backup\2018-10-09_181822\serverKey.pem" -y
 ```
+
+_Make sure to use the actual path to the backup you want to restore; this code is an example for a backup taken at the time of writing this documentation._
 
 
 
@@ -85,5 +85,6 @@ fmsadmin certificate import "C:\Program Files\FileMaker\FileMaker Server\CStore\
 You can request a certificate for multiple domains at once by separating them with commas:
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -NoExit -Command "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com"
+powershell.exe -ExecutionPolicy Bypass -NoExit -Command `
+    "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com"
 ```
