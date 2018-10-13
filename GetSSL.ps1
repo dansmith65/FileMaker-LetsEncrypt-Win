@@ -448,29 +448,28 @@ Try {
 			Write-Output "Submit-ACMEChallenge"
 			Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
 
-			<# Pause 10 seconds to wait for LE to validate our settings #>
-			Start-Sleep -s 10
-
-			<# Check the status #>
-			Write-Output "Update-ACMEIdentifier"
-			(Update-ACMEIdentifier $domainAlias -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}
-
-			<# Good Response Sample
-			ChallengePart          : ACMESharp.Messages.ChallengePart
-			Challenge              : ACMESharp.ACME.HttpChallenge
-			Type                   : http-01
-			Uri                    : https://acme-v01.api.letsencrypt.org/acme/challenge/a7qPufJw0Wdk7-Icw6V3xDDlXj1Ag5CVr4aZRw2H27
-									 A/323393389
-			Token                  : CqAhe31xGDeaqzf01dPx2j9NUqsBVqT1LpQ_Rhx1GiE
-			Status                 : valid
-			OldChallengeAnswer     : [, ]
-			ChallengeAnswerMessage :
-			HandlerName            : manual
-			HandlerHandleDate      : 11/3/2016 12:33:16 AM
-			HandlerCleanUpDate     :
-			SubmitDate             : 11/3/2016 12:34:48 AM
-			SubmitResponse         : {StatusCode, Headers, Links, RawContent...}
-			#>
+			Write-Output "Update-ACMEIdentifier: Wait for LE to validate settings"
+			$timeout = new-timespan -Minutes 1
+			$sw = [diagnostics.stopwatch]::StartNew()
+			do {
+				<# I tested with 1ms sleep and it was valid on the first iteration,
+				   but to be curtious to LE's server's, I set it to sleep for 1 second #>
+				Start-Sleep -Seconds 1
+				$response = (Update-ACMEIdentifier $domainAlias -ChallengeType http-01)
+				$status = ($response.Challenges | Where-Object {$_.Type -eq "http-01"}).Status
+				if ($sw.elapsed -gt $timeout) {
+					$response
+					$response.Challenges
+					$status
+					throw ("timed out")
+				}
+				Write-Host -NoNewline "."
+			}
+			until ($status -ne "pending")
+			if ($status -ne "valid") {
+				throw ("unexpected status value: $status")
+			}
+			Write-Output "`r`ndone`r`n"
 
 		}
 
@@ -485,14 +484,22 @@ Try {
 		Write-Output "Submit-ACMECertificate"
 		Submit-ACMECertificate $certAlias
 
-		<# Pause 10 seconds to wait for LE to create the certificate #>
-		Start-Sleep -s 10
-
-		<# Check the status $certAlias #>
-		Write-Output "Update-ACMECertificate"
-		Update-ACMECertificate $certAlias
-
-		<# Look for a serial number #>
+		Write-Output "Update-ACMECertificate: Wait for LE to create the certificate"
+		$timeout = new-timespan -Minutes 1
+		$sw = [diagnostics.stopwatch]::StartNew()
+		do {
+			Start-Sleep -Seconds 1
+			$response = (Update-ACMECertificate $certAlias)
+			$issuerSerialNumber = $response.IssuerSerialNumber
+			if ($sw.elapsed -gt $timeout) {
+				$response
+				$issuerSerialNumber
+				throw ("timed out")
+			}
+			Write-Host -NoNewline "."
+		}
+		until ($issuerSerialNumber)
+		Write-Output "done`r`n"
 
 
 		Write-Output "Export the private key"
