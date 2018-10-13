@@ -407,14 +407,14 @@ Try {
 		}
 
 		Write-Output "Create web.config file"
-	'<configuration>
-		<system.webServer>
-			<staticContent>
-				<mimeMap fileExtension="." mimeType="text/plain" />
-			</staticContent>
-		</system.webServer>
-	</configuration>' | Out-File -FilePath ($webConfigPath)
-
+		'<configuration>
+			<system.webServer>
+				<staticContent>
+					<mimeMap fileExtension="." mimeType="text/plain" />
+				</staticContent>
+			</system.webServer>
+		</configuration>' | Out-File -FilePath ($webConfigPath)
+		Write-Output "done`r`n"
 
 
 		<# Loop through the array of domains and validate each one with LE #>
@@ -529,6 +529,7 @@ Try {
 		$serverCustomPath = Join-Path $FMSPath 'CStore\serverCustom.pem'
 		if (Test-Path $intermPath) {
 			Backup-File $serverCustomPath
+			Write-Output ""
 		}
 
 		Write-Output "Import certificate via fmsadmin:"
