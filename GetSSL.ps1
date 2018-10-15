@@ -599,6 +599,11 @@ Try {
 						cmd /c $fmsadmin open
 					}
 				}
+			} else {
+				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run 
+				   when the user has to enter their user/pass. So just assume files should be
+				   opened and the user is at the console able to enter user/pass #>
+				cmd /c $fmsadmin open
 			}
 		}
 		Write-Output "done`r`n"
