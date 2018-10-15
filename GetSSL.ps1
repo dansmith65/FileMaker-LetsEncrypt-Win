@@ -617,6 +617,13 @@ Try {
 	}
 }
 
+Catch {
+	<# Make sure the error is logged in the transcript #>
+	$_ | Out-String
+	<# Throw it again so it sets an exit code #>
+	throw
+}
+
 Finally {
 	if ( $Logging ) {
 		Write-Output ""
