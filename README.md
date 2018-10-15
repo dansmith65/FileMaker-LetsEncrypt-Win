@@ -16,10 +16,10 @@ Thanks for figuring out the hard part David!
 ## Installation
 
 1. Open PowerShell console as an Administrator:
-    1. Click **Start**
-    2. Type **PowerShell**
-    3. Right-click on **Windows PowerShell**
-    4. Click **Run as administrator**
+   1. Click **Start**
+   2. Type **PowerShell**
+   3. Right-click on **Windows PowerShell**
+   4. Click **Run as administrator**
 
 2. Download the `GetSSL.ps1` file to your server:
 
