@@ -88,3 +88,13 @@ You can request a certificate for multiple domains at once by separating them wi
 powershell.exe -ExecutionPolicy Bypass -NoExit -Command `
     "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com"
 ```
+
+
+
+## Custom Shutdown/Startup
+
+This script must restart the FileMaker Server process to complete the installtion of the certificate. It does it's best to do a safe shutdown and to start the server, CWP (if it was running), and open files (if there were any open before). However, if you want to customize this process, you could edit the script towards the end where it does these steps. A likely example is if you want to give users longer than 30 seconds to close files before the server restarts. To do that, you would add ` -t #` with the number of seconds timeout you want after: `fmsadmin stop server -y`.
+
+Beware that if you have to enter an encryption at rest password when you open files, you will need to manage this process yourself, in this section of the script. NOTE: this only applies if you've configured your server not to store the password.
+
+Alternatively, if you have your own shutdown/startup scripts already, you could call them directly and remove the default steps provided in this script.
