@@ -16,7 +16,9 @@ Thanks for figuring out the hard part David!
 ## Installation
 
 1. Determine how the script will authenticate calls to fmsadmin:
-   - The recommended method is to use external authentication. This can easily be enabled on a default installation of FileMaker Server, and does not require an Active Directory:
+
+   1. The recommended method is to use external authentication. This can easily be enabled on a default installation of FileMaker Server, and does not require an Active Directory:
+
       1. Log in to FileMaker Server 17 admin console
       2. Administration > External Athentication > External Accounts for Admin Console Sign In: click __Change__
       3. Add a group name and click __Save Authentication Settings__  
@@ -24,9 +26,10 @@ Thanks for figuring out the hard part David!
       4. Admin Console Sign In > External Accounts: __Enable__
       5. Confirm it's working by typing this on the command line: `fmsadmin list files`. If you are not asked for a user/pass, then it has be properly enabled.
 
-   - With the default installation of FileMaker Server, you have to enter the admin console username and password for most calls to fmsadmin. If you use this method of authentication, you will have to enter your username and password 3 times when this script runs. If you want to be able to schedule the script to run un-attended, you will have to hard-code the username and password in the script in multiple places. Add `-u youruser -p yourpass` at the end of any line containing `$fmsadmin`, that requires authentication (import certificate, list files, stop server, open).
+   2. With the default installation of FileMaker Server, you have to enter the admin console username and password for most calls to fmsadmin. If you use this method of authentication, you will have to enter your username and password 3 times when this script runs. If you want to be able to schedule the script to run un-attended, you will have to hard-code the username and password in the script in multiple places. Add `-u youruser -p yourpass` at the end of any line containing `$fmsadmin`, that requires authentication (import certificate, list files, stop server, open).
 
 2. Open PowerShell console as an Administrator:
+
    1. Click **Start**
    2. Type **PowerShell**
    3. Right-click on **Windows PowerShell**
@@ -36,7 +39,7 @@ Thanks for figuring out the hard part David!
 
    `Invoke-WebRequest -Uri https://raw.githubusercontent.com/dansmith65/FileMaker-LetsEncrypt-Win/master/GetSSL.ps1 -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"`
 
-4. Get your first Certificate:
+4. Get your first Certificate:  
    This is necessary because the first time you run the script, it will likely update NuGet and install ACMESharp, both of which require confirmation.  
    You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
    Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
