@@ -263,7 +263,7 @@ Try {
 		Confirm-FMSAccess
 	}
 
-	Write-Host "Confirming access to fmsadmin.exe:"
+	Write-Output "Confirming access to fmsadmin.exe:"
 	$FMAccessConfirmed = Confirm-FMSAccess
 	if (-not ($FMAccessConfirmed)) {
 		<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
@@ -282,8 +282,9 @@ Try {
 			exit
 		}
 	} else {
-		Write-Host "confirmed`r`n"
+		Write-Output "confirmed"
 	}
+	Write-Output ""
 
 	if ($ScheduleTask) {
 		if ($Time.Date -eq $Start.Date) {
@@ -414,12 +415,12 @@ Try {
 				</staticContent>
 			</system.webServer>
 		</configuration>' | Out-File -FilePath ($webConfigPath)
-		Write-Output "done`r`n"
+		Write-Output "done"
+		Write-Output ""
 
 
 		<# Loop through the array of domains and validate each one with LE #>
 		for ( $i=0; $i -lt $Domains.length; $i++ ) {
-
 			<# Create a UUID alias to use for our domain request #>
 			$domain = $Domains[$i]
 			$domainAlias = $domainAliases[$i]
@@ -469,8 +470,8 @@ Try {
 			if ($status -ne "valid") {
 				throw ("unexpected status value: $status")
 			}
-			Write-Output "`r`ndone`r`n"
-
+			Write-Output "done"
+			Write-Output ""
 		}
 
 
@@ -499,7 +500,8 @@ Try {
 			Write-Host -NoNewline "."
 		}
 		until ($issuerSerialNumber)
-		Write-Output "`r`ndone`r`n"
+		Write-Output "done"
+		Write-Output ""
 
 
 		Write-Output "Export the private key"
@@ -541,12 +543,14 @@ Try {
 		#>
 		cmd /c "`"$fmsadmin`" certificate import `"$certPath`" -y"
 		if (! $?) { throw ("fmsadmin certificate import error code " + $LASTEXITCODE) }
-		Write-Output "done`r`n"
+		Write-Output "done"
+		Write-Output ""
 
 		Write-Output "Append the intermediary certificate:"
 		<# to support older FMS before 15 #>
 		Add-Content $serverCustomPath (Get-Content $intermPath)
-		Write-Output "done`r`n"
+		Write-Output "done"
+		Write-Output ""
 
 		Write-Output "Stop FileMaker Server:"
 		if ($Staging) {
@@ -561,7 +565,8 @@ Try {
 			cmd /c $fmsadmin stop server -y
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		}
-		Write-Output "done`r`n"
+		Write-Output "done"
+		Write-Output ""
 
 		Write-Output "Restart the FMS service:"
 		if ($Staging) {
@@ -569,7 +574,8 @@ Try {
 		} else {
 			Restart-Service "FileMaker Server"
 		}
-		Write-Output "done`r`n"
+		Write-Output "done"
+		Write-Output ""
 
 		<# Just in case server isn't configured to start automatically #>
 		Write-Output "Start FileMaker Server:"
@@ -600,19 +606,21 @@ Try {
 					}
 				}
 			} else {
-				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run 
+				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run
 				   when the user has to enter their user/pass. So just assume files should be
 				   opened and the user is at the console able to enter user/pass #>
 				cmd /c $fmsadmin open
 			}
 		}
-		Write-Output "done`r`n"
+		Write-Output "done"
+		Write-Output ""
 	}
 }
 
 Finally {
 	if ( $Logging ) {
-		Write-Host "`r`nDelete old Log files, if necessary."
+		Write-Output ""
+		Write-Output "Delete old Log files, if necessary."
 		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
 		Write-Host
 		Try {
