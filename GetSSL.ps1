@@ -212,6 +212,21 @@ function Test-Administrator	{
 	(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
+function Test-IsInteractiveShell {
+<#
+	.SYNOPSIS
+		Returns boolean determining if prompt was run noninteractive.
+	.DESCRIPTION
+		First, we check `[Environment]::UserInteractive` to determine if we're if the shell if running 
+		interactively. An example of not running interactively would be if the shell is running as a service.
+		If we are running interactively, we check the Command Line Arguments to see if the `-NonInteractive` 
+		switch was used; or an abbreviation of the switch.
+	.LINK
+		https://github.com/UNT-CAS/Test-IsNonInteractiveShell
+		(function was modified from this version before adding to GetSSL.ps1)
+#>
+	return ([Environment]::UserInteractive -and (-not ([Environment]::GetCommandLineArgs() | ?{ $_ -like '-NonI*' })))
+}
 
 Try {
 	<# Save start date/time so it can be accessed repeatedly throughout the script #>
@@ -272,14 +287,18 @@ Try {
 		$FMAccessConfirmed = Confirm-FMSAccess
 	}
 	if (-not ($FMAccessConfirmed)) {
-		Write-Host "no access!`r`n"
-		if (-not ($PSCmdlet.ShouldProcess(
-				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
-				"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
-				"Continue?"
-			)))
-		{
-			exit
+		if (Test-IsInteractiveShell) {
+			Write-Output "no access!"
+			if (-not ($PSCmdlet.ShouldProcess(
+					"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
+					"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
+					"Continue?"
+				)))
+			{
+				exit
+			}
+		} else {
+			throw ( "no access! Must be able to perform fmsadmin without entering user/pass when this script is not run interactively" )
 		}
 	} else {
 		Write-Output "confirmed"
