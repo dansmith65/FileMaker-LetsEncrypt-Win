@@ -710,7 +710,7 @@ Catch {
 }
 
 Finally {
-	<# Overwrite sensitive variables to get the out of memory #>
+	<# Overwrite sensitive variables to get them out of memory #>
 	$fmsCredential = $bstr = $username = $password = $userAndPassParamString = $null
 
 	if ( $Logging ) {
