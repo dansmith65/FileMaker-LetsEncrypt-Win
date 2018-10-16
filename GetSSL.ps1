@@ -186,11 +186,27 @@ function Confirm-FMSAccess {
 	.OUTPUTS
 		Boolean $true if user can access fmsadmin.exe
 #>
-	<# Future TODO: add username and password parameters #>
+	Param(
+		[Parameter(Position=1)]
+		[Alias('u')]
+		[string]$username = $null,
 
-	$Process = Start-Process -FilePath $fmsadmin -ArgumentList 'list files' -PassThru -WindowStyle Hidden
+		[Parameter(Position=2)]
+		[Alias('p')]
+		[string]$password = $null,
+
+		[string]$fmsadmin = 'C:\Program Files\FileMaker\FileMaker Server\Database Server\fmsadmin.exe',
+
+		[int]$timout = 3
+	)
+
+	$userAndPassParamString = $null
+	if ($username -and $password) {
+		$userAndPassParamString = "-u $username -p $password"
+	}
+	$Process = Start-Process -FilePath $fmsadmin -ArgumentList "list files $userAndPassParamString" -PassThru -WindowStyle Hidden
 	try {
-		Wait-Process -InputObject $Process -Timeout 3 -ErrorAction Stop
+		Wait-Process -InputObject $Process -Timeout $timout -ErrorAction Stop
 		if ($Process.ExitCode) {
 			if ($Process.ExitCode -eq 10502) {
 				Write-Debug "Error code 10502 likely means the server was not started"
@@ -275,29 +291,78 @@ Try {
 		if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
 			throw ("server process still not running after starting it; check FileMaker logs to see what's wrong")
 		}
-		<# Sometimes authentication fails right after starting server; trigger that failure here #>
-		Confirm-FMSAccess
+		<# Sometimes external authentication fails right after starting server; trigger that failure here #>
+		Confirm-FMSAccess -Timout 1
 	}
 
+	Write-Output "Attempt to load credentials from Credential Manager"
+	$userAndPassParamString = $null
+	if (Get-Module -Listavailable -Name CredentialManager) {
+		Import-Module CredentialManager
+	} else {
+		Write-Output "Install CredentialManager"
+		Install-Module -Name CredentialManager -AllowClobber -Confirm:$false -Force
+	}
+	$fmsCredential = Get-StoredCredential -Target "GetSSL FileMaker Server Admin Console"
+	if ($fmsCredential) {
+		$username = $fmsCredential.UserName
+		$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($fmsCredential.Password)
+		$password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+		$fmsCredential = $bstr = $null
+		if ($username -and $password) {
+			$userAndPassParamString = "-u $username -p $password"
+			Write-Output "found em!"
+		} else {
+			$username = $password = $null
+		}
+	} else {
+		Write-Output "no luck"
+	}
+	Write-Output ""
+
 	Write-Output "Confirming access to fmsadmin.exe:"
-	$FMAccessConfirmed = Confirm-FMSAccess
+	$FMAccessConfirmed = Confirm-FMSAccess $username $password -Timout 1
 	if (-not ($FMAccessConfirmed)) {
 		<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
 		   authentication, check again to be sure it's for real.
 		   https://community.filemaker.com/message/803496 #>
-		$FMAccessConfirmed = Confirm-FMSAccess
+		$FMAccessConfirmed = Confirm-FMSAccess $username $password
 	}
 	if (-not ($FMAccessConfirmed)) {
 		if (Test-IsInteractiveShell) {
 			Write-Output "no access!"
-			if (-not ($PSCmdlet.ShouldProcess(
-					"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
-					"Permissions not setup to allow performing fmsadmin.exe without entering your username and password.",
-					"Continue?"
-				)))
-			{
-				exit
+			Write-Output "A window will open where you can securely enter your fmsadmin login. Sometimes it takes a moment to open."
+			while (-not $FMAccessConfirmed) {
+				$fmsCredential = Get-Credential -Message "FileMaker Server Admin Console Sign In"
+				if ($fmsCredential) {
+					$username = $fmsCredential.UserName
+					$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($fmsCredential.Password)
+					$password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+					$fmsCredential = $bstr = $null
+					$FMAccessConfirmed = Confirm-FMSAccess $username $password
+					if (-not $FMAccessConfirmed) {
+						$username = $password = $null
+						Write-Output "That account didn't work, please try again."
+					}
+				} else {
+					Write-Output "no access!"
+					if (-not ($PSCmdlet.ShouldProcess(
+							"Permissions not setup to allow performing fmsadmin.exe without entering your username and password multiple times.",
+							"Permissions not setup to allow performing fmsadmin.exe without entering your username and password multiple times.",
+							"Continue?"
+						)))
+					{
+						exit
+					}
+					Break
+				}
 			}
+			
+			if ($FMAccessConfirmed) {
+				$userAndPassParamString = "-u $username -p $password"
+				New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine -UserName $username -Password $password | Out-Null
+			}
+			
 		} else {
 			throw ( "no access! Must be able to perform fmsadmin without entering user/pass when this script is not run interactively" )
 		}
@@ -305,6 +370,7 @@ Try {
 		Write-Output "confirmed"
 	}
 	Write-Output ""
+
 
 	if ($ScheduleTask) {
 		if ($Time.Date -eq $Start.Date) {
@@ -560,7 +626,7 @@ Try {
 		   path, like when stopping the server
 		   https://community.filemaker.com/thread/191306
 		#>
-		cmd /c "`"$fmsadmin`" certificate import `"$certPath`" -y"
+		cmd /c "`"$fmsadmin`" certificate import `"$certPath`" -y $userAndPassParamString"
 		if (! $?) { throw ("fmsadmin certificate import error code " + $LASTEXITCODE) }
 		Write-Output "done"
 		Write-Output ""
@@ -579,9 +645,9 @@ Try {
 			if ($FMAccessConfirmed) {
 				<# Only run this code if user will not be prompted for user/pass since this method
 				   of calling fmsadmin does not allow them to enter their user/pass #>
-				$FilesWereOpen = & $fmsadmin list files
+				$FilesWereOpen = & $fmsadmin list files $userAndPassParamString
 			}
-			cmd /c $fmsadmin stop server -y
+			cmd /c $fmsadmin stop server -y $userAndPassParamString
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		}
 		Write-Output "done"
@@ -614,21 +680,21 @@ Try {
 				<# Confirm FMAccess again, since it can asks for a password again after starting
 				   server. Do it twice; first time will likely fail, second time should succeed.
 				   https://community.filemaker.com/thread/191306 #>
-				Confirm-FMSAccess | Out-Null
-				if (Confirm-FMSAccess) {
+				Confirm-FMSAccess $username $password | Out-Null
+				if (Confirm-FMSAccess $username $password) {
 					Write-Output "check if files are open"
-					<# NOTE: If fmsadmin ask for a user/pass here, the user will not see the
+					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
 					   request, will not be able to enter them, and the script will hang. #>
-					if(-not(& cmd /c $fmsadmin list files)) {
+					if(-not(& cmd /c $fmsadmin list files $userAndPassParamString)) {
 						Write-Output "open files because they were open before FMS was stopped, but aren't now:"
-						cmd /c $fmsadmin open
+						cmd /c $fmsadmin open $userAndPassParamString
 					}
 				}
 			} else {
 				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run
 				   when the user has to enter their user/pass. So just assume files should be
 				   opened and the user is at the console able to enter user/pass #>
-				cmd /c $fmsadmin open
+				cmd /c $fmsadmin open $userAndPassParamString
 			}
 		}
 		Write-Output "done"
@@ -644,6 +710,9 @@ Catch {
 }
 
 Finally {
+	<# Overwrite sensitive variables to get the out of memory #>
+	$fmsCredential = $bstr = $username = $password = $userAndPassParamString = $null
+
 	if ( $Logging ) {
 		Write-Output ""
 		Write-Output "Delete old Log files, if necessary."

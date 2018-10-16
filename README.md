@@ -15,37 +15,24 @@ Thanks for figuring out the hard part David!
 
 ## Installation
 
-1. Determine how the script will authenticate calls to fmsadmin:
-
-   1. The recommended method is to use external authentication. This can easily be enabled on a default installation of FileMaker Server, and does not require an Active Directory:
-
-      1. Log in to FileMaker Server 17 admin console
-      2. Administration > External Athentication > External Accounts for Admin Console Sign In: click __Change__
-      3. Add a group name and click __Save Authentication Settings__  
-         (default install of Windows should work with "Administrators" as the group name)
-      4. Admin Console Sign In > External Accounts: __Enable__
-      5. Confirm it's working by typing this on the command line: `fmsadmin list files`. If you are not asked for a user/pass, then it has be properly enabled.
-
-   2. With the default installation of FileMaker Server, you have to enter the admin console username and password for most calls to fmsadmin. If you use this method of authentication, you will have to enter your username and password 3 times when this script runs. If you want to be able to schedule the script to run un-attended, you will have to hard-code the username and password in the script in multiple places. Add `-u youruser -p yourpass` at the end of any line containing `$fmsadmin`, that requires authentication (import certificate, list files, stop server, open).
-
-2. Open PowerShell console as an Administrator:
+1. Open PowerShell console as an Administrator:
 
    1. Click **Start**
    2. Type **PowerShell**
    3. Right-click on **Windows PowerShell**
    4. Click **Run as administrator**
 
-3. Download the `GetSSL.ps1` file to your server:
+2. Download the `GetSSL.ps1` file to your server:
 
    `Invoke-WebRequest -Uri https://raw.githubusercontent.com/dansmith65/FileMaker-LetsEncrypt-Win/master/GetSSL.ps1 -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"`
 
-4. Get your first Certificate:  
+3. Get your first Certificate:  
    You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
    Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
 
    `powershell.exe -ExecutionPolicy Bypass -NoExit -Command "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com"`
 
-5. (Optional) Setup scheduled task to renew the certificate:  
+4. (Optional) Setup scheduled task to renew the certificate:  
    Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to run the above command to renew the certificate before it expires every 90 days.
 
    `powershell.exe -ExecutionPolicy Bypass -NoExit -Command "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask"`
@@ -61,6 +48,23 @@ To view it the "PowerShell Way", you can use Get-Help like:
 ```powershell
 Get-Help .\GetSSL.ps1 -full
 ```
+
+
+
+## Authentication
+
+This script will seamlessly and securely manage authentication for you. If external authentication is setup for the user the script is run as to access the Admin Console, then that will be used. If it's not, you will be asked for your Admin Console Sign In when the script runs. These credentials will be stored in Windows Credential Manager; the same place FileMaker Server stores your encryption at rest password. The next time the script runs, it will load the stored credentials from Credential Manager.
+
+I haven't tested this scenario but the credentials can probably only be retrieved by the same user account that created them. If you modify your scheduled task to run as a different user, that might break this feature.
+
+If you want to, external authentication can easily be enabled on a default installation of FileMaker Server and does not require an Active Directory:
+
+1. Log in to FileMaker Server 17 admin console
+2. Administration > External Athentication > External Accounts for Admin Console Sign In: click __Change__
+3. Add a group name and click __Save Authentication Settings__  
+   (default install of Windows should work with "Administrators" as the group name)
+4. Admin Console Sign In > External Accounts: __Enable__
+5. Confirm it's working by typing this on the command line: `fmsadmin list files`. If you are not asked for a user/pass, then it has be properly enabled.
 
 
 
