@@ -729,7 +729,7 @@ Finally {
 				$credentials = Get-StoredCredential -Target "GetSSL Send Email"
 				if ($credentials) {
 					<# If CredentialManager is installed and user has stored credentials with the
-					   required name, assume they have also configured the following section: #>
+					   required name, assume user has also configured the following section: #>
 					Send-MailMessage -Subject "GetSSL Log $Domains" -Body (Get-Content $LogFilePath -Raw) -Encoding UTF8 -Credential $credentials -To $Email `
 						-From user@email.com `
 						-SmtpServer smtp.gmail.com `
