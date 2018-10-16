@@ -379,16 +379,15 @@ Try {
 		}
 
 
-		if (!(Get-Module -Listavailable -Name ACMESharp)) {
+		if (Get-Module -Listavailable -Name ACMESharp) {
+			Write-Output "Import ACMESharp Module"
+			Import-Module ACMESharp
+		} else {
 			Write-Output "Install ACMESharp"
-			# NOTE: the -Confirm:$false option doesn't prevent ALL confirmations,
-			# but it does prevent a few, which are most likely to only be
-			# required on the first run 
-			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false
+			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false -Force
 			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS
 		}
-		Write-Output "Import ACMESharp Module"
-		Import-Module ACMESharp
+		Write-Output ""
 
 		<# Initialize the vault to either Live or Staging#>
 		$Vault = Get-ACMEVault

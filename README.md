@@ -40,7 +40,6 @@ Thanks for figuring out the hard part David!
    `Invoke-WebRequest -Uri https://raw.githubusercontent.com/dansmith65/FileMaker-LetsEncrypt-Win/master/GetSSL.ps1 -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"`
 
 4. Get your first Certificate:  
-   This is necessary because the first time you run the script, it will likely update NuGet and install ACMESharp, both of which require confirmation.  
    You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
    Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
 
