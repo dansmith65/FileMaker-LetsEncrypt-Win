@@ -106,3 +106,16 @@ This script must restart the FileMaker Server process to complete the installtio
 Beware that if you have to enter an encryption at rest password when you open files, you will need to manage this process yourself, in this section of the script. NOTE: this only applies if you've configured your server not to store the password.
 
 Alternatively, if you have your own shutdown/startup scripts already, you could call them directly and remove the default steps provided in this script.
+
+
+
+## Email Log File
+
+At the very end of the script, there is a little code to email you the log file if the script was run from a scheduled task. To enable this code, you need to edit the SMTP connection info in the script and store your username and password so the script can access them. You can securely store your credentials by running these from PowerShell (which is running as Administrator):
+
+```powershell
+Install-Module -Name CredentialManager -Confirm:$false -Force
+New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
+```
+
+That's it! Now you can sleep well, knowing you will get an email if the script ran into any issues.

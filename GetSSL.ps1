@@ -234,6 +234,8 @@ Try {
 
 	if ( $Logging ) {
 		If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
+		$LogFilePath = Join-Path $LogDirectory "\powershell $($Start.ToString("yyyy-MM-dd_HHmmss")).log"
+		Start-Transcript -Append -Path $LogFilePath
 		Write-Output ""
 	}
 
@@ -652,5 +654,21 @@ Finally {
 			Stop-Transcript | Out-Null
 		}
 		Catch [System.InvalidOperationException]{}
+
+		if (-not (Test-IsInteractiveShell)) {
+			if (Get-Module -Listavailable -Name CredentialManager) {
+				Import-Module CredentialManager
+				$credentials = Get-StoredCredential -Target "GetSSL Send Email"
+				if ($credentials) {
+					<# If CredentialManager is installed and user has stored credentials with the
+					   required name, assume they have also configured the following section: #>
+					Send-MailMessage -Subject "GetSSL Log $Domains" -Body (Get-Content $LogFilePath -Raw) -Encoding UTF8 -Credential $credentials -To $Email `
+						-From user@email.com `
+						-SmtpServer smtp.gmail.com `
+						-Port 587 `
+						-UseSsl
+				}
+			}
+		}
 	}
 }
