@@ -234,8 +234,7 @@ Try {
 
 	if ( $Logging ) {
 		If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
-		Start-Transcript -Append -Path "$logDirectory\powershell $($Start.ToString("yyyy-MM-dd_HHmmss")).log"
-		Write-Host
+		Write-Output ""
 	}
 
 	$fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
@@ -648,7 +647,7 @@ Finally {
 		Write-Output ""
 		Write-Output "Delete old Log files, if necessary."
 		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
-		Write-Host
+		Write-Output ""
 		Try {
 			Stop-Transcript | Out-Null
 		}
