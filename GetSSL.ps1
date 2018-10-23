@@ -371,6 +371,7 @@ Try {
 			}
 			
 			if ($FMAccessConfirmed) {
+				Write-Output "securely store credentials"
 				$userAndPassParamString = "-u $username -p $password"
 				New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine -UserName $username -Password $password | Out-Null
 			}
