@@ -643,9 +643,11 @@ Try {
 		} else {
 			$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
 			if ($FMAccessConfirmed) {
+				Write-Output "check if files are open first"
 				<# Only run this code if user will not be prompted for user/pass since this method
 				   of calling fmsadmin does not allow them to enter their user/pass #>
 				$FilesWereOpen = & $fmsadmin list files $userAndPassParamString
+				Write-Output "now stop server"
 			}
 			cmd /c $fmsadmin stop server -y $userAndPassParamString
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
