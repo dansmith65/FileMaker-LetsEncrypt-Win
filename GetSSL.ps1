@@ -244,6 +244,18 @@ function Test-IsInteractiveShell {
 	return ([Environment]::UserInteractive -and (-not ([Environment]::GetCommandLineArgs() | ?{ $_ -like '-NonI*' })))
 }
 
+function Require-NuGet {
+<#
+	.SYNOPSIS
+		Check if the required version of NuGet package provider is installed, install it if necessary.
+#>
+	$PackageProvider = Get-PackageProvider -ListAvailable -Name NuGet
+	if (-not($PackageProvider) -or $PackageProvider.Version -lt [System.Version]"2.8.5.201") {
+		Write-Output "installing NuGet package provider"
+		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+	}
+}
+
 Try {
 	<# Save start date/time so it can be accessed repeatedly throughout the script #>
 	$Start = Get-Date
@@ -300,6 +312,7 @@ Try {
 	if (Get-Module -Listavailable -Name CredentialManager) {
 		Import-Module CredentialManager
 	} else {
+		Require-NuGet
 		Write-Output "Install CredentialManager"
 		Install-Module -Name CredentialManager -AllowClobber -Confirm:$false -Force
 	}
@@ -449,6 +462,7 @@ Try {
 			Write-Output "Import ACMESharp Module"
 			Import-Module ACMESharp
 		} else {
+			Require-NuGet
 			Write-Output "Install ACMESharp"
 			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false -Force
 			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS
