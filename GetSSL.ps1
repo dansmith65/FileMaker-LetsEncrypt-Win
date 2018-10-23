@@ -309,13 +309,12 @@ Try {
 
 	Write-Output "Attempt to load credentials from Credential Manager"
 	$userAndPassParamString = $null
-	if (Get-Module -Listavailable -Name CredentialManager) {
-		Import-Module CredentialManager
-	} else {
+	if (-not(Get-Module -Listavailable -Name CredentialManager)) {
 		Require-NuGet
 		Write-Output "Install CredentialManager"
 		Install-Module -Name CredentialManager -AllowClobber -Confirm:$false -Force
 	}
+	Import-Module CredentialManager
 	$fmsCredential = Get-StoredCredential -Target "GetSSL FileMaker Server Admin Console"
 	if ($fmsCredential) {
 		$username = $fmsCredential.UserName
@@ -458,14 +457,14 @@ Try {
 		}
 
 
-		if (Get-Module -Listavailable -Name ACMESharp) {
-			Write-Output "Import ACMESharp Module"
-			Import-Module ACMESharp
-		} else {
+		if (-not(Get-Module -Listavailable -Name ACMESharp)) {
 			Require-NuGet
 			Write-Output "Install ACMESharp"
 			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false -Force
+			Import-Module ACMESharp
 			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS
+		} else {
+			Import-Module ACMESharp
 		}
 		Write-Output ""
 
