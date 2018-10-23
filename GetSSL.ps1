@@ -614,7 +614,7 @@ Try {
 		Get-ACMECertificate $certAlias -ExportIssuerPEM $intermPath
 
 		$serverCustomPath = Join-Path $FMSPath 'CStore\serverCustom.pem'
-		if (Test-Path $intermPath) {
+		if (Test-Path $serverCustomPath) {
 			Backup-File $serverCustomPath
 			Write-Output ""
 		}
