@@ -249,10 +249,10 @@ function Require-NuGet {
 	.SYNOPSIS
 		Check if the required version of NuGet package provider is installed, install it if necessary.
 #>
-	$PackageProvider = Get-PackageProvider -ListAvailable -Name NuGet
-	if (-not($PackageProvider) -or $PackageProvider.Version -lt [System.Version]"2.8.5.201") {
+	$PackageProvider = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction:Ignore
+	if (-not($PackageProvider) -or ($PackageProvider.Version -lt [System.Version]"2.8.5.201")) {
 		Write-Output "installing NuGet package provider"
-		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
 	}
 }
 
