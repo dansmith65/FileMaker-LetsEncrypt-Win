@@ -454,7 +454,7 @@ Try {
 			if ($domain -Match ",| ") {
 				throw "Domain cannot contain a comma or parameter; perhaps two domains were passed as a single string? Try removing quotes from the domains."
 			}
-			$domainAliases += "$domain"+[guid]::NewGuid().ToString()
+			$domainAliases += $domain + "-" + [guid]::NewGuid().ToString()
 		}
 
 
