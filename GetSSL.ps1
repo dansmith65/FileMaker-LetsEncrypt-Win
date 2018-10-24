@@ -647,8 +647,12 @@ Try {
 
 		Write-Output "Append the intermediary certificate:"
 		<# to support older FMS before 15 #>
-		Add-Content $serverCustomPath (Get-Content $intermPath)
-		Write-Output "done"
+		if (Test-Path $intermPath) {
+			Add-Content $serverCustomPath (Get-Content $intermPath)
+			Write-Output "done"
+		} else {
+			Write-Output "skipped because intermediary certificate not found at path: $intermPath"
+		}
 		Write-Output ""
 
 		Write-Output "Stop FileMaker Server:"
