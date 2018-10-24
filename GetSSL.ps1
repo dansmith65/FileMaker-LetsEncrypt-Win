@@ -463,7 +463,7 @@ Try {
 			Write-Output "Install ACMESharp"
 			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false -Force
 			Import-Module ACMESharp
-			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS
+			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS -ErrorAction:SilentlyContinue
 		} else {
 			Import-Module ACMESharp
 		}
