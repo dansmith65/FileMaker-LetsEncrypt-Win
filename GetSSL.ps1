@@ -458,7 +458,7 @@ Try {
 		}
 
 
-		if (-not(Get-Module -Listavailable -Name ACMESharp)) {
+		if (-not(Get-Module -Listavailable -Name ACMESharp) -or -not(Get-Module -Listavailable -Name ACMESharp.Providers.IIS)) {
 			Require-NuGet
 			Write-Output "Install ACMESharp"
 			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false -Force
