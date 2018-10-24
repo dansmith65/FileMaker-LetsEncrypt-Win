@@ -705,7 +705,7 @@ Try {
 				<# Confirm FMAccess again, since it can asks for a password again after starting
 				   server. Do it twice; first time will likely fail, second time should succeed.
 				   https://community.filemaker.com/thread/191306 #>
-				Confirm-FMSAccess $username $password | Out-Null
+				Confirm-FMSAccess $username $password -Timout 1 | Out-Null
 				if (Confirm-FMSAccess $username $password) {
 					Write-Output "check if files are open now"
 					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
