@@ -635,9 +635,7 @@ Try {
 
 		Write-Output "Import certificate via fmsadmin:"
 		<# NOTE: use this method of calling fmsadmin whenever it's possible for it to ask user for
-		   input. Otherwise, just call it directly. Note that this call has two paths which must be
-		   quoted, so the syntax for escaping quotes is more complicated than if there is only one
-		   path, like when stopping the server
+		   input. Otherwise, just call it directly.
 		   https://community.filemaker.com/thread/191306
 		#>
 		cmd /c "`"$fmsadmin`" certificate import `"$certPath`" -y $userAndPassParamString"
@@ -664,10 +662,10 @@ Try {
 				Write-Output "check if files are open first"
 				<# Only run this code if user will not be prompted for user/pass since this method
 				   of calling fmsadmin does not allow them to enter their user/pass #>
-				$FilesWereOpen = & $fmsadmin list files $userAndPassParamString
+				$FilesWereOpen = cmd /c "`"$fmsadmin`" list files $userAndPassParamString"
 				Write-Output "now stop server"
 			}
-			cmd /c $fmsadmin stop server -y $userAndPassParamString
+			cmd /c "`"$fmsadmin`" stop server -y $userAndPassParamString"
 			if (! $?) { throw ("error code " + $LASTEXITCODE) }
 		}
 		Write-Output "done"
@@ -705,16 +703,16 @@ Try {
 					Write-Output "check if files are open"
 					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
 					   request, will not be able to enter them, and the script will hang. #>
-					if(-not(& cmd /c $fmsadmin list files $userAndPassParamString)) {
+					if(-not(& cmd /c "`"$fmsadmin`" list files $userAndPassParamString")) {
 						Write-Output "open files because they were open before FMS was stopped, but aren't now:"
-						cmd /c $fmsadmin open $userAndPassParamString
+						cmd /c "`"$fmsadmin`" open $userAndPassParamString"
 					}
 				}
 			} else {
 				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run
 				   when the user has to enter their user/pass. So just assume files should be
 				   opened and the user is at the console able to enter user/pass #>
-				cmd /c $fmsadmin open $userAndPassParamString
+				cmd /c "`"$fmsadmin`" open $userAndPassParamString"
 			}
 		}
 		Write-Output "done"
