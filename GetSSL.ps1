@@ -663,6 +663,11 @@ Try {
 				<# Only run this code if user will not be prompted for user/pass since this method
 				   of calling fmsadmin does not allow them to enter their user/pass #>
 				$FilesWereOpen = cmd /c "`"$fmsadmin`" list files $userAndPassParamString"
+				if ($FilesWereOpen) {
+					Write-Output "files are open"
+				} else {
+					Write-Output "no files open"
+				}
 				Write-Output "now stop server"
 			}
 			cmd /c "`"$fmsadmin`" stop server -y $userAndPassParamString"
@@ -693,22 +698,28 @@ Try {
 				<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes processes running the same bit depth as PowerShell #>
 				Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
 				& $fmsadmin start wpe
+				Write-Output "done starting WPE"
 			}
 			if ($FilesWereOpen) {
+				Write-Output "files were open, confirm access to fmsadmin"
 				<# Confirm FMAccess again, since it can asks for a password again after starting
 				   server. Do it twice; first time will likely fail, second time should succeed.
 				   https://community.filemaker.com/thread/191306 #>
 				Confirm-FMSAccess $username $password | Out-Null
 				if (Confirm-FMSAccess $username $password) {
-					Write-Output "check if files are open"
+					Write-Output "check if files are open now"
 					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
 					   request, will not be able to enter them, and the script will hang. #>
 					if(-not(& cmd /c "`"$fmsadmin`" list files $userAndPassParamString")) {
 						Write-Output "open files because they were open before FMS was stopped, but aren't now:"
 						cmd /c "`"$fmsadmin`" open $userAndPassParamString"
+					} else {
+						Write-Output "they are"
 					}
+				} else {
+					Write-Output "could not connect to fmsadmin"
 				}
-			} else {
+			} elseif ($FilesWereOpen -eq $null) {
 				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run
 				   when the user has to enter their user/pass. So just assume files should be
 				   opened and the user is at the console able to enter user/pass #>
