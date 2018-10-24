@@ -304,7 +304,7 @@ Try {
 			throw ("server process still not running after starting it; check FileMaker logs to see what's wrong")
 		}
 		<# Sometimes external authentication fails right after starting server; trigger that failure here #>
-		Confirm-FMSAccess -Timout 1
+		Confirm-FMSAccess -fmsadmin $fmsadmin -Timout 1
 	}
 
 	Write-Output "Attempt to load credentials from Credential Manager"
@@ -333,12 +333,12 @@ Try {
 	Write-Output ""
 
 	Write-Output "Confirming access to fmsadmin.exe:"
-	$FMAccessConfirmed = Confirm-FMSAccess $username $password -Timout 1
+	$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin -Timout 1
 	if (-not ($FMAccessConfirmed)) {
 		<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
 		   authentication, check again to be sure it's for real.
 		   https://community.filemaker.com/message/803496 #>
-		$FMAccessConfirmed = Confirm-FMSAccess $username $password
+		$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
 	}
 	if (-not ($FMAccessConfirmed)) {
 		if (Test-IsInteractiveShell) {
@@ -351,7 +351,7 @@ Try {
 					$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($fmsCredential.Password)
 					$password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
 					$fmsCredential = $bstr = $null
-					$FMAccessConfirmed = Confirm-FMSAccess $username $password
+					$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
 					if (-not $FMAccessConfirmed) {
 						$username = $password = $null
 						Write-Output "That account didn't work, please try again."
@@ -705,8 +705,8 @@ Try {
 				<# Confirm FMAccess again, since it can asks for a password again after starting
 				   server. Do it twice; first time will likely fail, second time should succeed.
 				   https://community.filemaker.com/thread/191306 #>
-				Confirm-FMSAccess $username $password -Timout 1 | Out-Null
-				if (Confirm-FMSAccess $username $password) {
+				Confirm-FMSAccess $username $password -fmsadmin $fmsadmin -Timout 1 | Out-Null
+				if (Confirm-FMSAccess -fmsadmin $fmsadmin $username $password) {
 					Write-Output "check if files are open now"
 					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
 					   request, will not be able to enter them, and the script will hang. #>
