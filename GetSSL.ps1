@@ -333,8 +333,10 @@ Try {
 	Write-Output ""
 
 	Write-Output "Confirming access to fmsadmin.exe:"
-	$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin -Timout 1
+	$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
 	if (-not ($FMAccessConfirmed)) {
+		# TODO: I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
+		Start-Sleep -Seconds 1
 		<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
 		   authentication, check again to be sure it's for real.
 		   https://community.filemaker.com/message/803496 #>
@@ -702,7 +704,7 @@ Try {
 			}
 			if ($FilesWereOpen) {
 				Write-Output "files were open, confirm access to fmsadmin"
-				<# Confirm FMAccess again, since it can asks for a password again after starting
+				<# Confirm FMAccess again, since it can ask for a password again after starting
 				   server. Do it twice; first time will likely fail, second time should succeed.
 				   https://community.filemaker.com/thread/191306 #>
 				Confirm-FMSAccess $username $password -fmsadmin $fmsadmin -Timout 1 | Out-Null
