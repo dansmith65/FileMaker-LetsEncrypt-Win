@@ -709,8 +709,16 @@ Try {
 				<# Confirm FMAccess again, since it can ask for a password again after starting
 				   server. Do it twice; first time will likely fail, second time should succeed.
 				   https://community.filemaker.com/thread/191306 #>
-				Confirm-FMSAccess $username $password -fmsadmin $fmsadmin -Timout 1 | Out-Null
-				if (Confirm-FMSAccess -fmsadmin $fmsadmin $username $password) {
+				$FMAccessConfirmedAfterRestart = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
+				if (-not ($FMAccessConfirmedAfterRestart)) {
+					# TODO: I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
+					Start-Sleep -Seconds 1
+					<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
+					   authentication, check again to be sure it's for real.
+					   https://community.filemaker.com/message/803496 #>
+					$FMAccessConfirmedAfterRestart = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
+				}
+				if ($FMAccessConfirmedAfterRestart) {
 					Write-Output "check if files are open now"
 					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
 					   request, will not be able to enter them, and the script will hang. #>
