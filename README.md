@@ -40,7 +40,8 @@ Thanks for figuring out the hard part David!
    ```
 
 4. (Optional) Setup scheduled task to renew the certificate:  
-   Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to run the above command to renew the certificate before it expires every 90 days.
+   Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to run the above command to renew the certificate before it expires every 90 days.  
+   Consider configuring [Log File to be Emailed](https://github.com/dansmith65/FileMaker-LetsEncrypt-Win/tree/dev#email-log-file) to you before you running this step.
 
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force;
