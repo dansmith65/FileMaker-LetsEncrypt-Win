@@ -126,8 +126,7 @@ Alternatively, if you have your own shutdown/startup scripts already, you could 
 At the very end of the script, there is a little code to email you the log file if the script was run from a scheduled task. To enable this code, you need to edit the SMTP connection info in the script and store your username and password so the script can access them. You can securely store your credentials by running these from PowerShell (which is running as Administrator):
 
 ```powershell
-Install-Module -Name CredentialManager -Confirm:$false -Force
 New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
 ```
 
-That's it! Now you can sleep well, knowing you will get an email if the script ran into any issues.
+That's it! Now you can sleep well, knowing you will get an email when the script runs. You might want to add a reminder to your calendar to expect an email when the task runs, so you can be sure to log into the server and view the log, if you don't happen to get an email.
