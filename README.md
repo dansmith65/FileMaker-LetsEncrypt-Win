@@ -30,13 +30,18 @@ Thanks for figuring out the hard part David!
    You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
    Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
 
-   `powershell.exe -ExecutionPolicy Bypass -NoExit -Command "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com"`
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force;
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com
+   ```
 
 4. (Optional) Setup scheduled task to renew the certificate:  
    Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to run the above command to renew the certificate before it expires every 90 days.
 
-   `powershell.exe -ExecutionPolicy Bypass -NoExit -Command "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask"`
-
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force;
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask
+   ```
 
 
 ## Documentation
@@ -96,8 +101,8 @@ _Make sure to use the actual path to the backup you want to restore; this code i
 You can request a certificate for multiple domains at once by separating them with commas:
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -NoExit -Command `
-    "& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com"
+Set-ExecutionPolicy Bypass -Scope Process -Force;
+& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com
 ```
 
 
