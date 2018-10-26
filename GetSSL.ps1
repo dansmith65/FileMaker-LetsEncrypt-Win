@@ -567,8 +567,10 @@ Try {
 				}
 				Write-Host -NoNewline "."
 			}
-			until ($status -ne "pending")
+			until ($status -and ($status -ne "pending"))
 			if ($status -ne "valid") {
+				Write-Output $response
+				Write-Output $response.Challenges
 				throw ("unexpected status value: $status")
 			}
 			Write-Output "done"
