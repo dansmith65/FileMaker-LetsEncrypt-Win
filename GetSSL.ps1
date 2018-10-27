@@ -57,8 +57,8 @@
 	File Name:   GetSSL.ps1
 	Author:      David Nahodyl contact@bluefeathergroup.com, modified by Daniel Smith dan@filemaker.consulting
 	Created:     2016-10-08
-	Revised:     2018-05-22
-	Version:     0.9-DS
+	Revised:     2018-10-26
+	Version:     1.0-DS
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
