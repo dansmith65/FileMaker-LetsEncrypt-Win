@@ -272,7 +272,7 @@ Try {
 	<# Display user input #>
 	Write-Output $Start.ToString("F")
 	Write-Output ""
-	Write-Output('  domains:      '+($Domains -join ', '))
+	Write-Output "  domains:      $($Domains -join ', ')"
 	Write-Output "  email:        $Email"
 	Write-Output "  FMSPath:      $FMSPath"
 	Write-Output "  Staging:      $Staging"
@@ -400,7 +400,7 @@ Try {
 			$StagingParameterAsText = if ($Staging) {"-Staging"}
 			$Action = New-ScheduledTaskAction `
 				-Execute powershell.exe `
-				-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $Domains -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`""
+				-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $($Domains -join ', ') -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`""
 
 			$Trigger = New-ScheduledTaskTrigger `
 				-Daily `
@@ -421,7 +421,7 @@ Try {
 			$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
 				-Description "Get an SSL certificate from Let's Encrypt and install it on FileMaker Server."
 
-			$TaskName = "GetSSL $Domains"
+			$TaskName = "GetSSL $($Domains -join ', ')"
 
 			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
 		}
