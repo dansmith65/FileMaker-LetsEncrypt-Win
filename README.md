@@ -48,6 +48,10 @@ Thanks for figuring out the hard part David!
    & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask
    ```
 
+Watch me install and test the script, explaining various options along the way:
+[![Full Walkthrough Video on YouTube](https://img.youtube.com/vi/a8DdnGXFDu4/0.jpg)](https://www.youtube.com/watch?v=a8DdnGXFDu4)
+
+
 
 ## Documentation
 
