@@ -76,6 +76,12 @@ If you want to, external authentication can easily be enabled on a default insta
 4. Admin Console Sign In > External Accounts: __Enable__
 5. Confirm it's working by typing this on the command line: `fmsadmin list files`. If you are not asked for a user/pass, then it has be properly enabled.
 
+If external authentication _is_ enabled but you _don't_ want to use it, you can store credentials with this command:
+
+```powershell
+New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
+```
+
 
 
 ## Staging
