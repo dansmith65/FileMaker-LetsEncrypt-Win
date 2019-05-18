@@ -202,7 +202,7 @@ function Confirm-FMSAccess {
 
 	$userAndPassParamString = $null
 	if ($username -and $password) {
-		$userAndPassParamString = "-u $username -p $password"
+		$userAndPassParamString = "-u `"$username`" -p `"$password`""
 	}
 	$Process = Start-Process -FilePath $fmsadmin -ArgumentList "list files $userAndPassParamString" -PassThru -WindowStyle Hidden
 	try {
@@ -322,7 +322,7 @@ Try {
 		$password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
 		$fmsCredential = $bstr = $null
 		if ($username -and $password) {
-			$userAndPassParamString = "-u $username -p $password"
+			$userAndPassParamString = "-u `"$username`" -p `"$password`""
 			Write-Output "found em!"
 		} else {
 			$username = $password = $null
@@ -374,7 +374,7 @@ Try {
 			
 			if ($FMAccessConfirmed) {
 				Write-Output "securely store credentials"
-				$userAndPassParamString = "-u $username -p $password"
+				$userAndPassParamString = "-u `"$username`" -p `"$password`""
 				New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine -UserName $username -Password $password | Out-Null
 			}
 			
