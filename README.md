@@ -8,9 +8,8 @@ Thanks for figuring out the hard part David!
 ## Notes
 
 * Only supports newer OS (only tested on Windows Server 2016).
-* Only tested on FileMaker Server 17.
-* Installs ACMESharp for you.
-* Will not display any errors, unless it fails.
+* Only tested on FileMaker Server 18.
+* Installs all dependencies for you.
 
 
 ## Installation
@@ -30,7 +29,14 @@ Thanks for figuring out the hard part David!
      -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"
    ```
 
-3. Get your first Certificate:  
+3. Install Dependencies:
+
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force;
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1'
+   ```
+
+4. Get your first Certificate:  
    You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
    Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
 
@@ -47,6 +53,9 @@ Thanks for figuring out the hard part David!
    Set-ExecutionPolicy Bypass -Scope Process -Force;
    & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask
    ```
+
+#TODO: record this somewhere: Once -Setup has been run, you likely never have to specify domain/email again unless you want to change it, or change between staging and production. Instead, just call script with -Renew parameter and it will use the last values entered.
+#TODO: mention InstallCertificate, which can be used when `get-pacertificate`? returns a valid cert, like when the certificate was downloaded, but the script failed to install it
 
 
 ## Documentation
@@ -79,7 +88,7 @@ If you want to, external authentication can easily be enabled on a default insta
 If external authentication _is_ enabled but you _don't_ want to use it, you can store credentials with this command:
 
 ```powershell
-New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
+Get-Credential | New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine
 ```
 
 
@@ -132,8 +141,10 @@ Alternatively, if you have your own shutdown/startup scripts already, you could 
 
 At the very end of the script, there is a little code to email you the log file if the script was run from a scheduled task. To enable this code, you need to edit the SMTP connection info in the script and store your username and password so the script can access them. You can securely store your credentials by running these from PowerShell (which is running as Administrator):
 
+#TODO: rewrite this to mention new parameter option to setup email
+
 ```powershell
-New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
+Get-Credential | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
 ```
 
 That's it! Now you can sleep well, knowing you will get an email when the script runs. You might want to add a reminder to your calendar to expect an email when the task runs, so you can be sure to log into the server and view the log, if you don't happen to get an email.
