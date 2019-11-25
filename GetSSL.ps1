@@ -52,8 +52,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2019-11-24
-	Version:     2.0.0-alpha1
+	Revised:     2019-11-25
+	Version:     2.0.0-alpha2
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -422,7 +422,7 @@ function Install-Cert {
 			<# Confirm FMAccess again, since it can ask for a password again after starting
 			   server. Do it twice; first time will likely fail, second time should succeed.
 			   https://community.filemaker.com/thread/191306 #>
-			Start-Sleep -3 # if the next check is too soon after starting server, it will fail
+			Start-Sleep -Seconds 3 # if the next check is too soon after starting server, it will fail
 			$FMAccessConfirmedAfterRestart = Test-FMSAccess
 			if (-not ($FMAccessConfirmedAfterRestart)) {
 				# NOTE: I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
@@ -644,32 +644,34 @@ function New-Cert {
 	$sw = [diagnostics.stopwatch]::StartNew()
 	do {
 		if ($sw.elapsed -gt $timeout) {
-			$order | Get-PAAuthorizations
+			$auths
 			throw ("authorization was not processed before timing out")
 		}
 
 		<# I tested with 1ms sleep and it was valid on the first iteration,
 		   but to be curtious to LE's server's, I set it to sleep for 1 second #>
 		Start-Sleep -Seconds 1
+		$auths = $order | Get-PAAuthorizations
 
 		# they start as pending then move to processing, then valid or invalid
-		$pending = $order | Get-PAAuthorizations | Where-Object {($_status -ne "pending") -and ($_status -ne "processing")}
+		$pending = $auths | Where-Object {($_status -eq "pending") -or ($_status -eq "processing")}
 		
         Write-Progress "Wait for LE to validate" -SecondsRemaining $timeout.Subtract($sw.Elapsed).TotalSeconds
 	}
-	until (! $inProcess)
+	until (! $pending)
 	Write-Progress "Wait for LE to validate" -Complete
 	Write-Output "completed in $([math]::Round($sw.Elapsed.TotalSeconds)) seconds"
-	$notValid = $order | Get-PAAuthorizations | Where-Object status -ne "valid"
+	$notValid = $auths | Where-Object status -ne "valid"
+	$order = Get-PAOrder -Refresh
 	if ($notValid) {
 		Write-Output ""
-		($notReady | Format-List | Out-String).Trim()
-		($notReady.challenges.error | Format-List | Out-String).Trim()
+		($notValid | Format-List | Out-String).Trim()
+		($notValid.challenges.error | Format-List | Out-String).Trim()
+		($order | Format-List | Out-String).Trim()
 		throw ("unexpected status value")
 	}
-	$order = Get-PAOrder -Refresh
 	if (($order.status -ne "ready") -and ($order.status -ne "valid")) {
-		$order | Format-List
+		($order | Format-List | Out-String).Trim()
 		throw ("order wasn't ready or valid, but should have been at this point in the script")
 	}
 	Write-Output "done"
@@ -861,17 +863,10 @@ Try {
 				Write-Output ""
 				New-Cert
 				Install-Cert
-				
-				if ($PSCmdlet.ShouldProcess(
-					"Schedule a task to renew this certificate?",
-					"Schedule a task to renew this certificate?",
-					"Schedule task?"
-				)) {
-					#TODO: make sure staging parameter works as expected
+
+				if (Test-IsInteractiveShell) {
+					# just call the script again to schedule a task; it will ask user if they want to proceed
 					& $PSCommandPath -ScheduleTask -Staging:$Staging
-				} else {
-					Write-Output "When ready, you can schedule a task with this command:"
-					Write-Output "  .'$PSCommandPath' -ScheduleTask"
 				}
 			}
 
@@ -971,7 +966,7 @@ Try {
 			until ($useSSL -is [Boolean])
 
 			$smtpInfo = @{from=$from; server=$server; port=$port; useSSL=$useSSL}
-			$smtpInfo
+			$smtpInfo | Format-Table
 			$smtpInfoJSON = ($smtpInfo | ConvertTo-Json -Compress)
 
 			Get-Credential -Message "GetSSL Send Email" | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -Comment $smtpInfoJSON | Out-Null
@@ -999,7 +994,6 @@ Try {
 				"Setup and install a certificate now?",
 				"Setup?"
 			)) {
-				#TODO: make sure staging parameter works as expected
 				& $PSCommandPath -Setup -Staging:$Staging
 			} else {
 				Write-Output "When ready, you can setup and install a certificate:"
