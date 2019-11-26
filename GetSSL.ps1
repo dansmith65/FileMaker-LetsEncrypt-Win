@@ -33,6 +33,10 @@
 	restore the old certificate or call this script again without this parameter to install a
 	production certificate.
 
+.PARAMETER Force
+	When renewing, force renewal, even if certificate is not recommended for renewal yet.
+	When using Staging parameter, force FMS to restart.
+
 .PARAMETER ScheduleTask
 	Schedule a task via Windows Task Scheduler to renew the certificate automatically.
 
@@ -52,8 +56,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2019-11-25
-	Version:     2.0.0-alpha2
+	Revised:     2019-11-26
+	Version:     2.0.0-alpha3
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -169,7 +173,8 @@ Param(
 	[switch] $ConfigureEmail,
 
 
-	[switch] $Staging
+	[switch] $Staging,
+	[switch] $Force
 )
 
 <# Exit immediately on error #>
@@ -366,7 +371,7 @@ function Install-Cert {
 
 
 	Write-Output "Stop FileMaker Server: __________________________________________________________"
-	if ($Staging) {
+	if ($Staging -and !$Force) {
 		Write-Output "skipped because -Staging parameter was provided"
 	} else {
 		$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
@@ -386,7 +391,7 @@ function Install-Cert {
 
 
 	Write-Output "Restart the FMS service: ________________________________________________________"
-	if ($Staging) {
+	if ($Staging -and !$Force) {
 		Write-Output "skipped because -Staging parameter was provided"
 	} else {
 		Restart-Service "FileMaker Server"
@@ -397,7 +402,7 @@ function Install-Cert {
 
 	<# Just in case server isn't configured to start automatically #>
 	Write-Output "Start FileMaker Server: _________________________________________________________"
-	if ($Staging) {
+	if ($Staging -and !$Force) {
 		Write-Output "skipped because -Staging parameter was provided"
 	} else {
 		try { Invoke-FMSAdmin start, server }
@@ -550,34 +555,6 @@ function Invoke-FMSAdmin {
 	return $stdout
 }
 
-function Set-Server {
-	$Server = Get-PAServer
-	if (! $Server) {
-		if ($Staging) {
-			Write-Output "Select staging server"
-			Set-PAServer LE_STAGE
-		} else {
-			Write-Output "Select production server"
-			Set-PAServer LE_PROD
-		}
-	} else {
-		<# Make sure Staging matches Staging parameter #>
-		if ($Server.location.Contains('staging')) {
-			if ($Staging) {
-				Write-Output "correct server already selected"
-			} else {
-				Write-Output "Switch from Staging to Production"
-				Set-PAServer LE_PROD
-			}
-		} elseif ($Staging) {
-			Write-Output "Switch from Production to Staging"
-			Set-PAServer LE_STAGE
-		} else {
-			Write-Output "correct server already selected"
-		}
-	}
-}
-
 function New-Cert {
 	if (! $account) {
 		Write-Output "Account Setup ___________________________________________________________________"
@@ -591,7 +568,7 @@ function New-Cert {
 				Write-Output "selected an existing account"
 				$account = $accounts
 			}
-			Set-PAAccount -ID $account.id # | Out-Null
+			Set-PAAccount -ID $account.id
 		} else {
 			Write-Output "create new account"
 			$account = New-PAAccount -Contact $Emails -AcceptTos
@@ -601,15 +578,18 @@ function New-Cert {
 	}
 
 
-	if (! $order) {
-		Write-Output "Create an Order _________________________________________________________________"
-		New-PAOrder $Domains
-		$order = Get-PAOrder
-		if (-not $order) {
-			throw "No order found. This should never be able to happen."
-		}
+	Write-Output "Create an Order _________________________________________________________________"
+	New-PAOrder $Domains -Force:$Force
+	$order = Get-PAOrder
+	if (-not $order) {
+		throw "No order found. This should never be able to happen."
+	} elseif ($order.status -eq "valid") {
+		Write-Output "Order has already been completed; previous certificate will be used."
+		Write-Output "Use the -Force parameter to always issue a new certificate here."
 		Write-Output ""
+		return
 	}
+	Write-Output ""
 
 
 	Write-Output "Authorizations and Challenges ___________________________________________________"
@@ -679,7 +659,7 @@ function New-Cert {
 
 
 	Write-Output "Request Certificate _____________________________________________________________"
-	New-PACertificate $Domains
+	New-PACertificate $Domains -Force:$Force
 	$order = Get-PAOrder -Refresh
 	if ($order.status -ne "valid") {
 		$order | Format-List
@@ -689,6 +669,34 @@ function New-Cert {
 		throw ("certificate didn't exist, which shouldn't be able to happen given the above validations that already ran")
 	}
 	Write-Output ""
+}
+
+function Set-Server {
+	$Server = Get-PAServer
+	if (! $Server) {
+		if ($Staging) {
+			Write-Output "Select staging server"
+			Set-PAServer LE_STAGE
+		} else {
+			Write-Output "Select production server"
+			Set-PAServer LE_PROD
+		}
+	} else {
+		<# Make sure Staging matches Staging parameter #>
+		if ($Server.location.Contains('staging')) {
+			if ($Staging) {
+				Write-Output "correct server already selected"
+			} else {
+				Write-Output "Switch from Staging to Production"
+				Set-PAServer LE_PROD
+			}
+		} elseif ($Staging) {
+			Write-Output "Switch from Production to Staging"
+			Set-PAServer LE_STAGE
+		} else {
+			Write-Output "correct server already selected"
+		}
+	}
 }
 
 function Schedule-Task {
@@ -703,9 +711,10 @@ function Schedule-Task {
 		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
 	)) {
 		$StagingParameterAsText = if ($Staging) {"-Staging"}
+		$ForceParameterAsText = if ($Force) {"-Force"}
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText -Confirm:0"""
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText $ForceParameterAsText -Confirm:0"""
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
@@ -803,58 +812,67 @@ Try {
 	Write-Output ""
 
 	switch ($PSCmdlet.ParameterSetName) {
-		'Renew' {
-			Write-Output "Renew..."
-			Set-Server
-			
-			# get Emails from Get-PAAccount
-			$account = Get-PAAccount
-			if (-not $account) {
-				throw "No ACME account configured. Run Setup first."
-			}
-			$Emails = ($account.contact).Replace('mailto:','')
-			
-			# get Domains from Get-PAOrder
-			$order = Get-PAOrder
-			if (-not $order) {
-				throw "No previously configured order found. Run Setup first."
-			}
-			$Domains = @($order.MainDomain) + $order.SANs
-
-			# NOTE: DO NOT break here as the setup code also works for renew, after initializing the above variables
-		}
-		
 		'Setup' {
+			if (-not(Get-Module -Listavailable -Name Posh-ACME*)) {
+				Write-Output "Posh-ACME module not found, Installing Dependencies..."
+				Install-Dependencies
+				Write-Output "done"
+			}
 			Write-Output "Setup..."
 			Set-Server
 			# NOTE: $Setup may or may not be set since passing -Domains and -Emails parameter will activate Setup mode even without the -Setup flag
 			if (! $Setup) { [switch] $Setup = $True }
 		}
 		
-		{$_ -eq 'Setup' -or $_ -eq 'Renew'} {
+		'Renew' {
+			Write-Output "Renew..."
+			Set-Server
+			
+			# get Emails from Get-PAAccount
+			$account = Get-PAAccount
+			if (! $account) {
+				throw "No ACME account configured. Run Setup first."
+			}
+			$Emails = ($account.contact).Replace('mailto:','')
+			
+			# get Domains from Get-PAOrder
+			$order = Get-PAOrder -Refresh
+			if (! $order) {
+				throw "No previously configured order found. Run Setup first."
+			}
+			$Domains = @($order.MainDomain) + $order.SANs
+		}
+		
+		{$_ -in 'Setup','Renew'} {
 			Write-Output "  domains:      $($Domains -join ', ')"
 			Write-Output "  emails:       $($Emails -join ', ')"
 			Write-Output "  Staging:      $Staging"
+			Write-Output "  Force:        $Force"
 			Write-Output ""
 
-			if ($Staging) {
+			if ($Staging -and $Force) {
 				<# either the first message is shown, or both the second AND third #>
 				$messages = @(
 					<# verboseDescription: Textual description of the action to be performed. This is what will be displayed to the user for ActionPreference.Continue. (-WhatIf parameter will show this) #>
-					"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
+					"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, then restart FileMaker Server service.",
 
 					<# verboseWarning: Textual query of whether the action should be performed, usually in the form of a question. This is what will be displayed to the user for ActionPreference.Inquire. #>
-					"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
+					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
 
 					<# caption: Caption of the window which may be displayed if the user is prompted whether or not to perform the action. caption may be displayed by some hosts, but not all.#>
+					"Replace with Staging Certificate?"
+				)
+			} elseif ($Staging) {
+				<# either the first message is shown, or both the second AND third #>
+				$messages = @(
+					"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
+					"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
 					"Replace with Staging Certificate?"
 				)
 			} else {
 				$messages = @(
 					"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.",
-
 					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
-
 					"Replace Certificate?"
 				)
 			}
@@ -866,7 +884,7 @@ Try {
 
 				if (Test-IsInteractiveShell) {
 					# just call the script again to schedule a task; it will ask user if they want to proceed
-					& $PSCommandPath -ScheduleTask -Staging:$Staging
+					& $PSCommandPath -ScheduleTask -Staging:$Staging -Force:$Force
 				}
 			}
 
@@ -878,7 +896,13 @@ Try {
 			Write-Output "  Staging:      $Staging"
 			Write-Output ""
 
-			if ($Staging) {
+			if ($Staging -and $Force) {
+				$messages = @(
+					"Replace FileMaker Server Certificate with stored Staging certificate, then restart FileMaker Server service.",
+					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
+					"Replace with Staging Certificate?"
+				)
+			} elseif ($Staging) {
 				$messages = @(
 					"Replace FileMaker Server Certificate with stored Staging certificate, will NOT restart FileMaker Server service, because this is just for testing/setup.",
 					"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
@@ -904,18 +928,21 @@ Try {
 		'ScheduleTask' {
 			Write-Output "ScheduleTask..."
 			Write-Output "  Staging:      $Staging"
+			Write-Output "  Force:        $Force"
 			Write-Output ""
 			Schedule-Task
 			
-			if ($PSCmdlet.ShouldProcess(
-				"Configure this script to email logs?",
-				"Configure this script to email logs?",
-				"Configure email?"
-			)) {
-				& $PSCommandPath -ConfigureEmail
-			} else {
-				Write-Output "Can do this later with this command:"
-				Write-Output "  .'$PSCommandPath' -ConfigureEmail"
+			if (-not(Get-StoredCredential -Target "GetSSL Send Email")) {
+				if ($PSCmdlet.ShouldProcess(
+					"Configure this script to email logs?",
+					"Configure this script to email logs?",
+					"Configure email?"
+				)) {
+					& $PSCommandPath -ConfigureEmail
+				} else {
+					Write-Output "Can do this later with this command:"
+					Write-Output "  .'$PSCommandPath' -ConfigureEmail"
+				}
 			}
 
 			break
@@ -979,12 +1006,6 @@ Try {
 
 		Default {
 			# InstallDependencies by default
-			<# if ($InstallDependencies) {
-				Write-Output "InstallDependencies was explicitly specified"
-			} else {
-				Write-Output "Default parameter set name was used"
-			} #>
-			
 			Write-Output "Installing Dependencies..."
 			Install-Dependencies
 			Write-Output "done"
@@ -994,7 +1015,7 @@ Try {
 				"Setup and install a certificate now?",
 				"Setup?"
 			)) {
-				& $PSCommandPath -Setup -Staging:$Staging
+				& $PSCommandPath -Setup -Staging:$Staging -Force:$Force
 			} else {
 				Write-Output "When ready, you can setup and install a certificate:"
 				Write-Output "  .'$PSCommandPath' -Setup"
