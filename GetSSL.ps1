@@ -56,8 +56,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2019-11-26
-	Version:     2.0.0-alpha3
+	Revised:     2019-12-03
+	Version:     2.0.0-alpha4
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -602,7 +602,7 @@ function New-Cert {
 	$webConfigPath = Join-Path $acmeChallengePath "web.config"
 	if (! (Test-Path $webConfigPath)) {
 		Write-Output "Create web.config file"
-		'<configuration><system.webServer><staticContent><mimeMap fileExtension="." mimeType="text/plain" /></staticContent></system.webServer></configuration>' | Out-File $webConfigPath
+		'<configuration><system.webServer><staticContent><remove fileExtension="." /><mimeMap fileExtension="." mimeType="text/plain" /></staticContent></system.webServer></configuration>' | Out-File $webConfigPath
 	}
 
 	Write-Output "Create challenge file(s)"
