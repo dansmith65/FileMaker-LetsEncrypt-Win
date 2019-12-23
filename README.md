@@ -5,14 +5,17 @@ This is a fork of the work started by: [David Nahodyl, Blue Feather](http://blue
 Thanks for figuring out the hard part David!
 
 
+
 ## Notes
 
 * Only supports newer OS (only tested on Windows Server 2016).
 * Only tested on FileMaker Server 18.
+  * TODO: did I test on 17 yet?
 * Installs all dependencies for you.
 
 
-## Installation
+
+## Installation and Quick Setup
 
 1. Open PowerShell console as an Administrator:
 
@@ -36,26 +39,65 @@ Thanks for figuring out the hard part David!
    & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1'
    ```
 
-4. Get your first Certificate:  
-   You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
-   Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
+   After this task completes, you'll be asked if you want to get a certificate, at which point you'll be prompted for domain(s) and email. Then, you'll be asked if you want to schedule a task. If you do all these steps, the setup is complete for this server.
+
+4. (Optional) Email Log File:  
+
+   Store credentials and SMTP info so this script can send logs when it runs from a scheduled task.
 
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force;
-   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' -ConfigureEmail
    ```
 
-4. (Optional) Setup scheduled task to renew the certificate:  
-   Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to run the above command to renew the certificate before it expires every 90 days.  
-   Consider configuring [Log File to be Emailed](https://github.com/dansmith65/FileMaker-LetsEncrypt-Win/tree/dev#email-log-file) to you before you running this step.
+
+
+## Advanced Options
+
+Examples in this section will use a shortened syntax and assumes you will set execution policy manually, or prefix the command with the snippets above. It also leaves the path to GetSSL.ps1 off for the same reason.
+
+1. Get and Install a Certificate:  
+   Also use this command to modify the stored domain or email, which is used for renewals. Once this is done, you likely never have to specify domain/email again unless you want to change it.
 
    ```powershell
-   Set-ExecutionPolicy Bypass -Scope Process -Force;
-   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask
+   .\GetSSL.ps1 -Setup -Domains fms.example.com, fms.example2.com -Emails user@email.com, user2@email.com
    ```
 
-#TODO: record this somewhere: Once -Setup has been run, you likely never have to specify domain/email again unless you want to change it, or change between staging and production. Instead, just call script with -Renew parameter and it will use the last values entered.
-#TODO: mention InstallCertificate, which can be used when `get-pacertificate`? returns a valid cert, like when the certificate was downloaded, but the script failed to install it
+2. Renew Certificate:  
+   Renew the most recently used certificate. This is the command called by the scheduled task, but you can run it manually if needed.
+
+   ```powershell
+   .\GetSSL.ps1 -Renew
+   ```
+
+3. Install Certificate:  
+   Installs the most recently retrieved certificate. Useful if a certificate was successfully
+	retrieved, but something failed before it was installed.
+
+   ```powershell
+   .\GetSSL.ps1 -InstallCertificate
+   ```
+
+4. Setup scheduled task to renew the certificate:  
+   Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to manually renew the certificate before it expires every 90 days.  
+
+   ```powershell
+   .\GetSSL.ps1 -ScheduleTask
+   ```
+
+   Note that 63 days was choosens as the default renwal interval because it will make the renewal fall on the same day of the week and is close to the recommended renewal point which is 2/3 of the certificates lifespan. You can specify your own renewal interval by appending: `-IntervalDays 70`, or just manually modify the task via **Task Scheduler**.
+
+   You can also specify your preferred renewal time by appending: `-Time 2:00am`. The default time is **4:00am**.
+
+   A full example with custom interval and time:
+
+   ```powershell
+   .\GetSSL.ps1 -ScheduleTask -IntervalDays 70 -Time 2:00am
+   ```
+
+5. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
+   You could potentially do this to modify the domains or your contact email. GetSSL will use whatever domains are returned by `Get-PAOrder` and whatever account is returned by `Get-PAAccount`.
+
 
 
 ## Documentation
@@ -97,7 +139,7 @@ Get-Credential | New-StoredCredential -Target "GetSSL FileMaker Server Admin Con
 
 I won't duplicate what is already said about the `-Staging` parameter in the official help docs but I do want to add to it. Let's Encrypt service imposes [Rate Limits](https://letsencrypt.org/docs/rate-limits/), which are less restrictive on their staging environment. While developing this script (and before I added this parameter) I repeatedly tested with the same domain and quickly hit the limit of 5 identical certificate requests per week. While this won't pertain to most people, I do want to point out that if you are doing testing, you _should_ use the `-Staging` parameter.
 
-Using this parameter is a great way of doing the initial setup/testing as well. It allows you to go through all the steps without worrying about Rate Limits or your server being restarted. Common issues like permissions to call fmsadmin.exe without having to type a user/pass can be resolved before doing a final install. Since the existing certificate is backed up before being replaced, you could always restore to existing configuration, if needed.
+Using this parameter is a great way of doing the initial setup/testing as well. It allows you to go through all the steps without worrying about rate limits or your server being restarted. Common issues like permissions to call fmsadmin.exe without having to type a user/pass can be resolved before doing a final install. Since the existing certificate is backed up before being replaced, you could always restore to existing configuration, if needed.
 
 
 
@@ -134,17 +176,3 @@ This script must restart the FileMaker Server process to complete the installtio
 Beware that if you have to enter an encryption at rest password when you open files, you will need to manage this process yourself, in this section of the script. NOTE: this only applies if you've configured your server not to store the password.
 
 Alternatively, if you have your own shutdown/startup scripts already, you could call them directly and remove the default steps provided in this script.
-
-
-
-## Email Log File
-
-At the very end of the script, there is a little code to email you the log file if the script was run from a scheduled task. To enable this code, you need to edit the SMTP connection info in the script and store your username and password so the script can access them. You can securely store your credentials by running these from PowerShell (which is running as Administrator):
-
-#TODO: rewrite this to mention new parameter option to setup email
-
-```powershell
-Get-Credential | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
-```
-
-That's it! Now you can sleep well, knowing you will get an email when the script runs. You might want to add a reminder to your calendar to expect an email when the task runs, so you can be sure to log into the server and view the log, if you don't happen to get an email.
