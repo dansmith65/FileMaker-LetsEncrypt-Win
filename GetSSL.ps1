@@ -634,7 +634,7 @@ function New-Cert {
 		$auths = $order | Get-PAAuthorizations
 
 		# they start as pending then move to processing, then valid or invalid
-		$pending = $auths | Where-Object {($_status -eq "pending") -or ($_status -eq "processing")}
+		$pending = $auths | Where-Object {($_.status -eq "pending") -or ($_.status -eq "processing")}
 		
         Write-Progress "Wait for LE to validate" -SecondsRemaining $timeout.Subtract($sw.Elapsed).TotalSeconds
 	}
