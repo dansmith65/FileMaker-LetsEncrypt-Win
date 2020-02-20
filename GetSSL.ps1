@@ -56,8 +56,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2019-12-03
-	Version:     2.0.0-alpha4
+	Revised:     2020-02-20
+	Version:     2.0.0-alpha5
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
