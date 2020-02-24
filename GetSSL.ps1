@@ -523,8 +523,7 @@ function Invoke-FMSAdmin {
 	if (! $p.HasExited) {
 		$p.Kill()
 		$p.Close()
-		Write-Output "$fmsadmin $Parameters"
-		throw [System.TimeoutException] "fmsadmin did not complete within timeout of $Timeout seconds"
+		throw [System.TimeoutException] "fmsadmin did not complete within timeout of $Timeout seconds`n$fmsadmin $Parameters"
 	}
 
 	<# NOTE: Reading output after WaitForExit might be an issue if output stream fills up, but I
@@ -536,12 +535,12 @@ function Invoke-FMSAdmin {
 	$stderr = $p.StandardError.ReadToEnd()
 
 	if ($p.ExitCode) {
-		Write-Output "$fmsadmin $Parameters"
+		Write-Verbose "$fmsadmin $Parameters" -Verbose
 		if ($stderr) {
 			# NOTE: I don't think fmsadmin uses stderr, but I'd rather include it to be safe
 			Write-Host "stderr: $stderr"
 		}
-		if ($stdout) {Write-Host $stdout}
+		if ($stdout) {Write-Verbose $stdout -Verbose}
 
 		$e = [System.ApplicationException]::New("fmsadmin exit code: " + $p.ExitCode)
 		$e.Data.Add('ExitCode', $p.ExitCode)
@@ -550,7 +549,8 @@ function Invoke-FMSAdmin {
 
 	if ($stderr) {
 		# NOTE: I don't think fmsadmin uses stderr, but I'd rather include it to be safe
-		Write-Host "stderr: $stderr"
+		Write-Verbose "$fmsadmin $Parameters" -Verbose
+		Write-Error "stderr: $stderr"
 	}
 	return $stdout
 }
