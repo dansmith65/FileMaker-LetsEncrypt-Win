@@ -56,8 +56,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2020-02-20
-	Version:     2.0.0-alpha5
+	Revised:     2020-02-23
+	Version:     2.0.0-alpha6
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -376,7 +376,12 @@ function Install-Cert {
 	} else {
 		$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
 		Write-Output "check if files are open first"
-		$FilesWereOpen = Invoke-FMSAdmin list, files -Timeout 5
+		try { [Bool]$FilesWereOpen = Invoke-FMSAdmin list, files -Timeout 5 }
+		catch [System.TimeoutException] {
+			Write-Output "failed to list files within 5 seconds"
+			Write-Output "assume files are open since it's safer than the alternative"
+			$FilesWereOpen = $true
+		}
 		if ($FilesWereOpen) {
 			Write-Output "files are open"
 		} else {
@@ -439,7 +444,13 @@ function Install-Cert {
 			}
 			if ($FMAccessConfirmedAfterRestart) {
 				Write-Output "check if files are open now"
-				if(-not(Invoke-FMSAdmin list, files -Timeout 5)) {
+				try { [Bool]$FilesAreOpen = Invoke-FMSAdmin list, files -Timeout 5 }
+				catch [System.TimeoutException] {
+					Write-Output "failed to list files within 5 seconds"
+					Write-Output "assume files are not open since it's safer than the alternative"
+					$FilesAreOpen = $false
+				}
+				if(-not($FilesAreOpen) {
 					Write-Output "open files because they were open before FMS was stopped, but aren't now:"
 					Invoke-FMSAdmin open
 				} else {
@@ -500,7 +511,6 @@ function Invoke-FMSAdmin {
 		}
 #>
 	Param(
-		[CmdletBinding()]
 		[Parameter(Mandatory=$false,ValueFromPipeline=$true,Position=1)]
 		[string[]] $Parameters,
 		
@@ -535,12 +545,12 @@ function Invoke-FMSAdmin {
 	$stderr = $stderrTask.Result;
 
 	if ($p.ExitCode) {
-		Write-Debug "$fmsadmin $Parameters"
+		Write-Verbose "$fmsadmin $Parameters" -Verbose
 		if ($stderr) {
 			# NOTE: I don't think fmsadmin uses stderr, but I'd rather include it to be safe
 			Write-Host "stderr: $stderr"
 		}
-		if ($stdout) {Write-Debug $stdout}
+		if ($stdout) {Write-Verbose $stdout -Verbose}
 
 		$e = [System.ApplicationException]::New("fmsadmin exit code: " + $p.ExitCode)
 		$e.Data.Add('ExitCode', $p.ExitCode)
