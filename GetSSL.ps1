@@ -500,12 +500,13 @@ function Invoke-FMSAdmin {
 		}
 #>
 	Param(
+		[CmdletBinding()]
 		[Parameter(Mandatory=$false,ValueFromPipeline=$true,Position=1)]
 		[string[]] $Parameters,
 		
 		[int]$Timeout = 30
 	)
-	# https://stackoverflow.com/a/8762068
+	# https://stackoverflow.com/a/36539226
 	$pinfo = New-Object System.Diagnostics.ProcessStartInfo
 	$pinfo.FileName = $fmsadmin
 	$pinfo.RedirectStandardError = $true
@@ -516,9 +517,13 @@ function Invoke-FMSAdmin {
 
 	$p = New-Object System.Diagnostics.Process
 	$p.StartInfo = $pinfo
-	$p.Start() | Out-Null
 
-	$p.WaitForExit($Timeout * 1000) | Out-Null
+	[Void]$p.Start()
+
+	$stdoutTask = $p.StandardOutput.ReadToEndAsync();
+	$stderrTask = $p.StandardError.ReadToEndAsync();
+
+	[Void]$p.WaitForExit($Timeout * 1000)
 
 	if (! $p.HasExited) {
 		$p.Kill()
@@ -526,21 +531,16 @@ function Invoke-FMSAdmin {
 		throw [System.TimeoutException] "fmsadmin did not complete within timeout of $Timeout seconds`n$fmsadmin $Parameters"
 	}
 
-	<# NOTE: Reading output after WaitForExit might be an issue if output stream fills up, but I
-	         don't ever expect fmsadmin to generate large output, so I'm not going to attempt to
-	         implement a stream reader (and I'm not sure if it's even necessary since there is a
-	         timeout)
-	         https://stackoverflow.com/a/42995301 #>
-	$stdout = $p.StandardOutput.ReadToEnd()
-	$stderr = $p.StandardError.ReadToEnd()
+	$stdout = $stdoutTask.Result;
+	$stderr = $stderrTask.Result;
 
 	if ($p.ExitCode) {
-		Write-Verbose "$fmsadmin $Parameters" -Verbose
+		Write-Debug "$fmsadmin $Parameters"
 		if ($stderr) {
 			# NOTE: I don't think fmsadmin uses stderr, but I'd rather include it to be safe
 			Write-Host "stderr: $stderr"
 		}
-		if ($stdout) {Write-Verbose $stdout -Verbose}
+		if ($stdout) {Write-Debug $stdout}
 
 		$e = [System.ApplicationException]::New("fmsadmin exit code: " + $p.ExitCode)
 		$e.Data.Add('ExitCode', $p.ExitCode)
