@@ -56,8 +56,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2020-02-23
-	Version:     2.0.0-alpha6
+	Revised:     2020-02-26
+	Version:     2.0.0-alpha7
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -450,7 +450,7 @@ function Install-Cert {
 					Write-Output "assume files are not open since it's safer than the alternative"
 					$FilesAreOpen = $false
 				}
-				if(-not($FilesAreOpen) {
+				if(-not($FilesAreOpen)) {
 					Write-Output "open files because they were open before FMS was stopped, but aren't now:"
 					Invoke-FMSAdmin open
 				} else {
