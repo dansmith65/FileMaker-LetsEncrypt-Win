@@ -376,7 +376,7 @@ function Install-Cert {
 	} else {
 		$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
 		Write-Output "check if files are open first"
-		try { [Bool]$FilesWereOpen = Invoke-FMSAdmin list, files -Timeout 5 }
+		try { $FilesWereOpen = Invoke-FMSAdmin list, files -Timeout 5 }
 		catch [System.TimeoutException] {
 			Write-Output "failed to list files within 5 seconds"
 			Write-Output "assume files are open since it's safer than the alternative"
@@ -388,7 +388,7 @@ function Install-Cert {
 			Write-Output "no files open"
 		}
 		Write-Output "now stop server"
-		Invoke-FMSAdmin stop, server, -y, -t, 60
+		Invoke-FMSAdmin stop, server, -y, -t, 60 -Timeout 80
 		#TODO: 10002 error code here means Event timed out, which I'm getting every time on my test server; should I ignore that?
 		$mustStartServer = $True #TODO: use this in catch, or finally block to determine if server should be started?
 	}
@@ -444,7 +444,7 @@ function Install-Cert {
 			}
 			if ($FMAccessConfirmedAfterRestart) {
 				Write-Output "check if files are open now"
-				try { [Bool]$FilesAreOpen = Invoke-FMSAdmin list, files -Timeout 5 }
+				try { $FilesAreOpen = Invoke-FMSAdmin list, files -Timeout 5 }
 				catch [System.TimeoutException] {
 					Write-Output "failed to list files within 5 seconds"
 					Write-Output "assume files are not open since it's safer than the alternative"
@@ -1047,6 +1047,7 @@ Finally {
 	$fmsCredential = $username = $password = $userAndPassParamString = $null
 
 	if ($Logging) {
+		Get-Module -Name Posh-ACME | Select-Object Name, Version, DotNetFrameworkVersion | Format-List
 		Write-Output $Start.ToString("F") # add nicely formatted date to log
 		Write-Output ""
 		Write-Output "Delete old Log files, if necessary."
