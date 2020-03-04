@@ -275,7 +275,7 @@ function Install-Cert {
 	<# FileMaker Server must be started to import a certificate (and to confirm access) #>
 	if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
 		Write-Output "FileMaker Server process was not running, it will be started now"
-		Invoke-FMSAdmin start, server
+		Invoke-FMSAdmin start, server -Timeout 90
 		Start-Sleep -Seconds 1
 		if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
 			throw ("server process still not running after starting it; check FileMaker logs to see what's wrong")
