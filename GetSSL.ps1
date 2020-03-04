@@ -197,7 +197,8 @@ function Backup-File {
 	Copy-Item $path $BackupDirectory
 }
 
-function email ($subject, $body) {
+function Send-Email ($subject, $body) {
+	$result = ""
 	try {
 		$credentials = Get-StoredCredential -Target "GetSSL Send Email"
 		if ($credentials) {
@@ -217,12 +218,14 @@ function email ($subject, $body) {
 			}
 		}
 		$credentials = $null
-		return $result
 	}
 	catch {
 		# don't let this stop the script from continuing
-		return $_
+		$result = ($_ | Out-String)
+		$result += "Stack Trace:`r`n"
+        $result += $_.ScriptStackTrace
 	}
+	return $result
 }
 
 function Install-Dependencies {
@@ -1061,7 +1064,7 @@ Try {
 
 			Get-Credential -Message "GetSSL Send Email" | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -Comment $smtpInfoJSON | Out-Null
 			
-			email -Subject "GetSSL setup test" `
+			Send-Email -Subject "GetSSL setup test" `
 				-Body "If you get this email, then GetSSL has been configured to send logs via email when it's run via scheduled task."
 
 			break
@@ -1121,7 +1124,7 @@ Finally {
 		Try {Stop-Transcript | Out-Null} Catch [System.InvalidOperationException] {}
 
 		if (-not (Test-IsInteractiveShell)) {
-			email -Subject GetSSL $Domains -Body (Get-Content $LogFilePath -Raw)
+			Send-Email -Subject GetSSL $Domains -Body (Get-Content $LogFilePath -Raw)
 		}
 	}
 }
