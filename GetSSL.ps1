@@ -411,16 +411,32 @@ function Install-Cert {
 	if ($Staging -and !$Force) {
 		Write-Output "skipped because -Staging parameter was provided"
 	} else {
-		try { Invoke-FMSAdmin start, server }
-		catch [System.ApplicationException] {
-			if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
-				#TODO: test this case:
-				Write-Output "(If server is set to start automatically, error 10006 is expected)"
-			} else {
-				#TODO: test this case
-				throw
+		<# Try to start server multiple times, if necessary. I'm not sure, but I suspect fmsadmin
+		   sometimes asks for credentials here, which causes the script to fail #>
+		$retries = 3
+		$timeout = 90
+		while ($true) {
+			$retries--
+			try {
+				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+				Invoke-FMSAdmin start, server -Timeout $timeout
+				break
+			}
+			catch [System.TimeoutException] {
+				if ($retries -gt 0) {
+					Write-Output "  timed out, $retries attempt(s) left before aborting"
+					$timeout *= 2
+				} else { throw }
+			}
+			catch [System.ApplicationException] {
+				# NOTE: Error: 10007 (Requested object does not exist) occurs when service is stopped
+				if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
+					Write-Output "(If server is set to start automatically, error 10006 is expected)"
+					break
+				} else { throw }
 			}
 		}
+
 		$mustStartServer = $False
 		if ($WPEWasRunning -and -not(Get-Process fmscwpc -ErrorAction:Ignore)) {
 			<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes running the same bit depth as PowerShell #>
