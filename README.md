@@ -71,8 +71,7 @@ Examples in this section will use a shortened syntax and assumes you will set ex
    ```
 
 3. Install Certificate:  
-   Installs the most recently retrieved certificate. Useful if a certificate was successfully
-	retrieved, but something failed before it was installed.
+   Installs the most recently retrieved certificate. Useful if a certificate was successfully retrieved, but something failed before it was installed.
 
    ```powershell
    .\GetSSL.ps1 -InstallCertificate
@@ -95,7 +94,13 @@ Examples in this section will use a shortened syntax and assumes you will set ex
    .\GetSSL.ps1 -ScheduleTask -IntervalDays 70 -Time 2:00am
    ```
 
-5. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
+5. Update Dependencies:
+
+   ```powershell
+   .\GetSSL.ps1 -InstallDependencies -Force
+   ```
+
+6. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
    You could potentially do this to modify the domains or your contact email. GetSSL will use whatever domains are returned by `Get-PAOrder` and whatever account is returned by `Get-PAAccount`.
 
 

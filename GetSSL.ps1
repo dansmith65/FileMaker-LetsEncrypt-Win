@@ -6,6 +6,7 @@
 	Install all dependent libraries; restart may be required if .NET is updated. Run this once
 	before using this script for the first time. This action is performed if no parameters sent to
 	the script.
+	Include the -Force parameter to update dependencies.
 
 .PARAMETER Setup
 	Store new domains and emails, or modify them, then get and install a certificate. This is
@@ -247,18 +248,18 @@ function Install-Dependencies {
 	}
 
 	if ((Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full").Release -lt 461308) {
-		if (-not(Get-Module -Listavailable -Name Posh-ACME.net46)) {
+		if ($Force -or -not(Get-Module -Listavailable -Name Posh-ACME.net46)) {
 			Write-Output "Install Posh-ACME.net46"
 			Install-Module -Name Posh-ACME.net46 -AllowClobber -Confirm:$false -Force
 		}
 	} else {
-		if (-not(Get-Module -Listavailable -Name Posh-ACME)) {
+		if ($Force -or -not(Get-Module -Listavailable -Name Posh-ACME)) {
 			Write-Output "Install Posh-ACME"
 			Install-Module -Name Posh-ACME -AllowClobber -Confirm:$false -Force
 		}
 	}
 
-	if (-not(Get-Module -Listavailable -Name CredentialManager)) {
+	if ($Force -or -not(Get-Module -Listavailable -Name CredentialManager)) {
 		Write-Output "Install CredentialManager"
 		Install-Module -Name CredentialManager -AllowClobber -Confirm:$false -Force
 	}
