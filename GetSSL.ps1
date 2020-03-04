@@ -1047,12 +1047,23 @@ Finally {
 	$fmsCredential = $username = $password = $userAndPassParamString = $null
 
 	if ($Logging) {
-		Get-Module -Name Posh-ACME | Select-Object Name, Version, DotNetFrameworkVersion | Format-List
-		Write-Output $Start.ToString("F") # add nicely formatted date to log
+		Try { Write-Output ""; (Get-Help -Full $PSCommandPath).alertSet.alert.Text }
+		Catch { Write-Output "failed to extract script version from header comment"; $_ }
+
+		Try {
+			Write-Output "`r`nmodule versions installed:"
+			(Get-Module -Listavailable -Name Posh-ACME.net46, Posh-ACME, CredentialManager |
+				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
+			Write-Output "`r`nmodule versions used:"
+			(Get-InstalledModule -Name Posh-ACME.net46, Posh-ACME, CredentialManager |
+				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
+		}
+		Catch { Write-Output "failed to get Posh-ACME module version"; $_ }
+
 		Write-Output ""
+		Write-Output $Start.ToString("F") # add nicely formatted date to log
 		Write-Output "Delete old Log files, if necessary."
 		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
-		Write-Output ""
 		Try {Stop-Transcript | Out-Null} Catch [System.InvalidOperationException] {}
 
 		if (-not (Test-IsInteractiveShell)) {
