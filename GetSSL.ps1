@@ -1039,6 +1039,7 @@ Try {
 Catch {
 	<# Make sure the error is logged in the transcript #>
 	$_ | Out-String
+	Write-Output "Stack Trace:" $_.ScriptStackTrace
 	<# Throw it again so it sets an exit code #>
 	throw
 }
