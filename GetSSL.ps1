@@ -389,8 +389,39 @@ function Install-Cert {
 			Write-Output "no files open"
 		}
 		Write-Output "now stop server"
-		Invoke-FMSAdmin stop, server, -y, -t, 60 -Timeout 80
-		#TODO: 10002 error code here means Event timed out, which I'm getting every time on my test server; should I ignore that?
+		<# Try to stop server multiple times, if necessary. #>
+		$retries = 3
+		$timeout = 90
+		while ($true) {
+			$retries--
+			try {
+				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+				# first timeout is sent to fmsadmin, to give users this amount of time to close files before they are forcibly closed
+				# second timeout is to forcibly stop the fmsadmin command in case it hangs
+				Invoke-FMSAdmin stop, server, -y, -t, $timeout -Timeout ($timeout + 20)
+				break
+			}
+			catch [System.TimeoutException] {
+				if ($retries -gt 0) {
+					Write-Output "  timed out, $retries attempt(s) left before aborting"
+					$timeout *= 2
+				} else { throw }
+			}
+			catch [System.ApplicationException] {
+				if ($_.Exception.Message.StartsWith("fmsadmin")) {
+					if (($_.Exception.Data.ExitCode) -eq 10002) {
+						if ($retries -gt 0) {
+							Write-Output "  fmsadmin timed out, $retries attempt(s) left before aborting"
+							$timeout *= 2
+						} else { throw }
+					}
+					elseif (($_.Exception.Data.ExitCode) -eq 10502) {
+						Write-Output "10502 (Host unreachable) occurs when the service or server is stopped"
+						break
+					} else { throw }
+				} else { throw }
+			}
+		}
 		$mustStartServer = $True #TODO: use this in catch, or finally block to determine if server should be started?
 	}
 	Write-Output ""
