@@ -430,7 +430,7 @@ function Install-Cert {
 				} else { throw }
 			}
 		}
-		$mustStartServer = $True #TODO: use this in catch, or finally block to determine if server should be started?
+		$mustStartServer = $True
 	}
 	Write-Output ""
 
@@ -440,7 +440,6 @@ function Install-Cert {
 		Write-Output "skipped because -Staging parameter was provided"
 	} else {
 		Restart-Service "FileMaker Server"
-		$mustStartService = $True #TODO: use this in catch, or finally block to determine if service should be started?
 	}
 	Write-Output ""
 
@@ -1100,6 +1099,53 @@ Catch {
 }
 
 Finally {
+	if ($mustStartServer) {
+		Write-Output "mustStartServer was still true in Finally block, so try to start it..."
+		if ((Get-Service "FileMaker Server").Status  -ne "Running") {
+			Write-Output "FileMaker Server service was not running, it will be started now"
+			Start-Service "FileMaker Server"
+			Start-Sleep 2 # give the service a few seconds to start before testing if fmserver is running
+		}
+		$retries = 4
+		$timeout = 90
+		while ($true) {
+			$retries--
+			try {
+				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+				Invoke-FMSAdmin start, server -Timeout $timeout
+				break
+			}
+			catch [System.TimeoutException] {
+				if ($retries -gt 0) {
+					Write-Output "  timed out, $retries attempt(s) left before aborting"
+					$timeout *= 2
+				} else {
+					Write-Output "Sorry, still couldn't start server"
+					break
+				}
+			}
+			catch [System.ApplicationException] {
+				# NOTE: Error: 10007 (Requested object does not exist) occurs when service is stopped
+				if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
+					Write-Output "(If server is set to start automatically, error 10006 is expected)"
+				} else {
+					Write-Output "Sorry, still couldn't start server"
+				}
+				break
+			}
+		}
+		if ($WPEWasRunning) {
+			try {Invoke-FMSAdmin start, wpe} catch{}
+		}
+		if ($FilesWereOpen) {
+			try {Invoke-FMSAdmin open -Timeout 60}
+			catch {
+				# blindly try again, giving it more time
+				try {Invoke-FMSAdmin open -Timeout 180} catch{}
+			}
+		}
+	}
+
 	<# Overwrite sensitive variables to get them out of memory #>
 	$fmsCredential = $username = $password = $userAndPassParamString = $null
 
