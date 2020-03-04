@@ -1063,7 +1063,7 @@ Finally {
 		Catch { Write-Output "failed to get Posh-ACME module version"; $_ }
 
 		Write-Output ""
-		Write-Output $Start.ToString("F") # add nicely formatted date to log
+		Write-Output (Get-Date).ToString("F") # add nicely formatted date to log
 		Write-Output "Delete old Log files, if necessary."
 		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
 		Try {Stop-Transcript | Out-Null} Catch [System.InvalidOperationException] {}
