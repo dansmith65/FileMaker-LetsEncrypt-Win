@@ -9,9 +9,10 @@ Thanks for figuring out the hard part David!
 ## Notes
 
 * Only supports newer OS (only tested on Windows Server 2016).
-* Only tested on FileMaker Server 18.
-  * TODO: did I test on 17 yet?
+* Only tested FileMaker Server 17 and 18.
 * Installs all dependencies for you.
+* TODO: should I write a second version of Invoke-FMSAdmin that doesn't return the response from fmsadmin? The current version is more complicated because it does that, which is sometimes necessary. Other times, I don't want the output and I think piping that to nul is causing issues.
+	- I don't think Write-Output from within Invoke-FMSAdmin is doing what I want. Sometimes I pipe output to null, othertimes I send it to a variable. If I want error info, I think I need to do it some other way.
 
 
 
