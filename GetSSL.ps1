@@ -1155,10 +1155,10 @@ Finally {
 
 		Try {
 			Write-Output "`r`nmodule versions installed:"
-			(Get-Module -Listavailable -Name Posh-ACME.net46, Posh-ACME, CredentialManager |
+			(Get-Module -Listavailable -Name Posh-ACME.net46, Posh-ACME, CredentialManager -ErrorAction Ignore |
 				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
 			Write-Output "`r`nmodule versions used:"
-			(Get-InstalledModule -Name Posh-ACME.net46, Posh-ACME, CredentialManager |
+			(Get-InstalledModule -Name Posh-ACME.net46, Posh-ACME, CredentialManager -ErrorAction Ignore |
 				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
 		}
 		Catch { Write-Output "failed to get Posh-ACME module version"; $_ }
