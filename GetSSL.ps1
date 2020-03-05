@@ -859,7 +859,7 @@ Try {
 	[string] $FMSPath = 'C:\Program Files\FileMaker\FileMaker Server\'
 	[int]    $LogsToKeep = 50
 	[switch] $Logging = -not $host.name.contains('ISE')
-	[string] $LogDirectory = Join-Path $FMSPath ('Data\Documents\' + (Split-Path 'R:\GetSSL.ps1' -Leaf))
+	[string] $LogDirectory = Join-Path $FMSPath ('Data\Documents\' + (Split-Path $PSCommandPath -Leaf))
 	[string] $fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
 	$externalAuth = '' # declare as script-level variable
 	$userAndPassParamString = '' # declare as script-level variable (set user/pass here if you want to hard-code it in your script)
