@@ -57,8 +57,8 @@
 .NOTES
 	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2020-03-04
-	Version:     2.0.0-alpha9
+	Revised:     2020-03-05
+	Version:     2.0.0-alpha10
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -765,9 +765,8 @@ function Set-Server {
 }
 
 function Schedule-Task {
-#TODO: review my notes about the task; I think it's configuration needs to change to be reliable
 	if ($Time.Date -eq $Start.Date) {
-		#Date contained in Time parameter was today, so add IntervalDays
+		# Date contained in Time parameter was today, so add IntervalDays
 		$Time = $Time.AddDays($IntervalDays)
 	}
 	if ($PSCmdlet.ShouldProcess(
@@ -787,22 +786,24 @@ function Schedule-Task {
 			-At $Time
 
 		$Settings = New-ScheduledTaskSettingsSet `
-			-AllowStartIfOnBatteries `
 			-DontStopIfGoingOnBatteries `
-			-ExecutionTimeLimit 00:10 `
-			-StartWhenAvailable
+			-ExecutionTimeLimit 00:30
 
-		$Principal = New-ScheduledTaskPrincipal `
-			-UserId $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-			-LogonType S4U `
-			-RunLevel Highest
-
-		$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
+		$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings `
 			-Description "Get an SSL certificate from Let's Encrypt and install it on FileMaker Server."
 
-		$TaskName = "GetSSL $($Domains -join ', ')"
+		$TaskName = "GetSSL"
 
-		Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
+		try {
+			$credentials = Get-Credential `
+				-UserName $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+				-Message "Windows user to run the task"
+
+			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force `
+				-User $credentials.UserName `
+				-Password ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($credentials.Password)))
+		}
+		finally { $credentials = $null }
 	}
 }
 
