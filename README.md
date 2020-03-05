@@ -9,10 +9,8 @@ Thanks for figuring out the hard part David!
 ## Notes
 
 * Only supports newer OS (only tested on Windows Server 2016).
-* Only tested FileMaker Server 17 and 18.
+* Only tested on FileMaker Server 17 and 18.
 * Installs all dependencies for you.
-* TODO: should I write a second version of Invoke-FMSAdmin that doesn't return the response from fmsadmin? The current version is more complicated because it does that, which is sometimes necessary. Other times, I don't want the output and I think piping that to nul is causing issues.
-	- I don't think Write-Output from within Invoke-FMSAdmin is doing what I want. Sometimes I pipe output to null, othertimes I send it to a variable. If I want error info, I think I need to do it some other way.
 
 
 
@@ -33,29 +31,21 @@ Thanks for figuring out the hard part David!
      -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"
    ```
 
-3. Install Dependencies:
+3. Access the wizard-style setup by calling without parameters:  
+   _(if you're just testing, add ` -Staging` to the end)_
 
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force;
    & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1'
    ```
 
-   After this task completes, you'll be asked if you want to get a certificate, at which point you'll be prompted for domain(s) and email. Then, you'll be asked if you want to schedule a task. If you do all these steps, the setup is complete for this server.
-
-4. (Optional) Email Log File:  
-
-   Store credentials and SMTP info so this script can send logs when it runs from a scheduled task.
-
-   ```powershell
-   Set-ExecutionPolicy Bypass -Scope Process -Force;
-   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' -ConfigureEmail
-   ```
+   After this task completes, you'll be asked if you want to get a certificate, at which point you'll be prompted for domain(s) and email. Then, you'll be asked if you want to schedule a task, then configure email. If you do all these steps, the setup is complete for this server.
 
 
 
 ## Advanced Options
 
-Examples in this section will use a shortened syntax and assumes you will set execution policy manually, or prefix the command with the snippets above. It also leaves the path to GetSSL.ps1 off for the same reason.
+Examples in this section will use a shortened syntax and assumes you will set execution policy manually, or prefix the command with the snippets above. It also leaves the path to `GetSSL.ps1` off for the same reason.
 
 1. Get and Install a Certificate:  
    Also use this command to modify the stored domain or email, which is used for renewals. Once this is done, you likely never have to specify domain/email again unless you want to change it.
@@ -95,22 +85,33 @@ Examples in this section will use a shortened syntax and assumes you will set ex
    .\GetSSL.ps1 -ScheduleTask -IntervalDays 70 -Time 2:00am
    ```
 
-5. Update Dependencies:
+5. Email Log File:  
+
+   Store credentials and SMTP info so this script can send logs when it runs from a scheduled task.
+
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force;
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' -ConfigureEmail
+   ```
+
+6. Update Dependencies:
 
    ```powershell
    .\GetSSL.ps1 -InstallDependencies -Force
    ```
 
-6. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
+7. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
    You could potentially do this to modify the domains or your contact email. GetSSL will use whatever domains are returned by `Get-PAOrder` and whatever account is returned by `Get-PAAccount`.
 
 
 
 ## Documentation
 
+NOTE: This documentation is not yet fully updated for version 2.
+
 If you view the [GetSSL.ps1](GetSSL.ps1) file as text; the documentation is in comments at the top of the file.
 
-To view it the "PowerShell Way", you can use Get-Help like:
+To view it the "PowerShell Way", you can use `Get-Help` like:
 
 ```powershell
 Get-Help .\GetSSL.ps1 -full
@@ -164,20 +165,9 @@ _Make sure to use the actual path to the backup you want to restore; this code i
 
 
 
-## Multiple Domains
-
-You can request a certificate for multiple domains at once by separating them with commas:
-
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force;
-& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com
-```
-
-
-
 ## Custom Shutdown/Startup
 
-This script must restart the FileMaker Server process to complete the installtion of the certificate. It does it's best to do a safe shutdown and to start the server, CWP (if it was running), and open files (if there were any open before). However, if you want to customize this process, you could edit the script towards the end where it does these steps. A likely example is if you want to give users longer than 30 seconds to close files before the server restarts. To do that, you would add ` -t #` with the number of seconds timeout you want after: `fmsadmin stop server -y`.
+This script must restart the FileMaker Server process to complete the installtion of the certificate. It does it's best to do a safe shutdown and to start the server, CWP (if it was running), and open files (if there were any open before). However, if you want to customize this process, you could edit the script's `Install-Cert` function.
 
 Beware that if you have to enter an encryption at rest password when you open files, you will need to manage this process yourself, in this section of the script. NOTE: this only applies if you've configured your server not to store the password.
 
