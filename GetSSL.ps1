@@ -197,6 +197,8 @@ function Backup-File {
 	Copy-Item $path $BackupDirectory
 }
 
+function Get-ScriptLineNumber { return $MyInvocation.ScriptLineNumber }
+
 function Send-Email ($subject, $body) {
 	$result = ""
 	try {
@@ -795,13 +797,14 @@ function Schedule-Task {
 		$TaskName = "GetSSL"
 
 		try {
+			Write-Output ("You will now be asked for your Windows password, you should trust this script before entering it. You can audit this section of code by reviewing line #{0} of {1}." -f (Get-ScriptLineNumber), (Split-Path $PSCommandPath -Leaf))
 			$credentials = Get-Credential `
 				-UserName $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
 				-Message "Windows user to run the task"
 
 			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force `
 				-User $credentials.UserName `
-				-Password ([Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($credentials.Password)))
+				-Password $credentials.GetNetworkCredential().Password
 		}
 		finally { $credentials = $null }
 	}
