@@ -11,6 +11,7 @@ Thanks for figuring out the hard part David!
 * Only supports newer OS (only tested on Windows Server 2016).
 * Only tested on FileMaker Server 17 and 18.
 * Installs all dependencies for you.
+* If you use this script in production, you should watch this repo in GitHub so you get a notification when it's updated.
 
 
 
@@ -23,7 +24,8 @@ Thanks for figuring out the hard part David!
    3. Right-click on **Windows PowerShell**
    4. Click **Run as administrator**
 
-2. Download the `GetSSL.ps1` file to your server:
+2. Download the `GetSSL.ps1` file to your server:  
+   _(replace **master** with **dev** or a tag name to download a different version of this script)_
 
    ```powershell
    Invoke-WebRequest `
