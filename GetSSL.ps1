@@ -1120,14 +1120,16 @@ Finally {
 		Catch { Write-Output "failed to extract script version from header comment"; $_ }
 
 		Try {
+			<#
 			Write-Output "`r`nmodule versions installed:"
 			(Get-Module -Listavailable -Name Posh-ACME.net46, Posh-ACME, CredentialManager -ErrorAction Ignore |
 				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
+			#>
 			Write-Output "`r`nmodule versions used:"
 			(Get-InstalledModule -Name Posh-ACME.net46, Posh-ACME, CredentialManager -ErrorAction Ignore |
 				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
 		}
-		Catch { Write-Output "failed to get Posh-ACME module version"; $_ }
+		Catch { Write-Output "failed to get module versions"; $_ }
 
 		Write-Output ""
 		Write-Output (Get-Date).ToString("F") # add nicely formatted date to log
