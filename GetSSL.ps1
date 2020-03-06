@@ -16,65 +16,21 @@
 .LINK
 	https://github.com/rmbolger/Posh-ACME/wiki/%28Advanced%29-Manual-HTTP-Challenge-Validation
 
-#TODO: review/correct all these examples:
 .EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com
+	.\GetSSL.ps1 -Renew -Confirm:0
 
-	Simplest call with domain to sign listed first and email second.
+	Don't ask for confirmation; use this parameter when called from a scheduled task.
 
-.EXAMPLE
-	.\GetSSL.ps1 test.com, sub.example.com user@test.com
-
-	Multiple domains can be listed, separated by commas.
-
-.EXAMPLE
-	.\GetSSL.ps1 -d test.com -e user@test.com
-
-	Can use short-hand parameter names.
-
-.EXAMPLE
-	.\GetSSL.ps1 -Domains test.com -Emails user@test.com
-
-	Or full parameter names.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com
-
-	Use if you installed FileMaker Server in a non-default path.
-	Must end in a backslash.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -Confirm:$False
-
-	Don't ask for confirmation; use the -Confirm:$False parameter when called from a scheduled task.
 	To have this script run silently, it must also be able to perform fmsadmin.exe without asking for username and password. There are two ways to do that:
-		1. Add a group name that is allowed to access the Admin Console and run the script as a user that belongs to the group.
-		2. Hard-code the username and password into this script. (NOT RECOMMENDED)
+	  1. Add a group name that is allowed to access the Admin Console and run the script as a user
+	     that belongs to the group.
+	  2. Run this script with the Setup parameter the first time you use it and enter your admin
+	     console credentials when it asks you.
 
 .EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -WhatIf
+	.\GetSSL.ps1 -Setup test.com user@test.com -WhatIf
 
 	Display the inputs, then exit; use to verify you passed parameters in the correct format
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -IntervalDays 70
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 70 days
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -Time 1:00am
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days at 1:00am.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -Time "1/1/2018 1:00am"
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days starting Jan 1st 2018 at 1:00am.
 #>
 
 
