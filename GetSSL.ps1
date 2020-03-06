@@ -1000,8 +1000,10 @@ Try {
 			Write-Output "  Yahoo               465"
 			Write-Output "  Hotmail             465"
 			do {
-				$port = Read-Host -Prompt ("SMTP Port")
-				try { $port = [int]$port }
+				$default = 587
+				$port = Read-Host -Prompt ("SMTP Port [$default]")
+				if ($port -eq "") {$port = $default}
+				try { $port -eq [int]$port }
 				catch {
 					Write-Output "port must be an integer"
 					$port = $null
