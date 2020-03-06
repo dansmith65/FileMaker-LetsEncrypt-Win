@@ -2,60 +2,7 @@
 .SYNOPSIS
 	Get an SSL certificate from Let's Encrypt and install it on FileMaker Server.
 
-.PARAMETER InstallDependencies
-	Install all dependent libraries; restart may be required if .NET is updated. Run this once
-	before using this script for the first time. This action is performed if no parameters sent to
-	the script.
-	Include the -Force parameter to update dependencies.
-
-.PARAMETER Setup
-	Store new domains and emails, or modify them, then get and install a certificate. This is
-	intended to be run with a user at the console so they can enter fmsadmin credentials, if needed.
-
-.PARAMETER Domains
-	Array of domain(s) for which you would like an SSL Certificate. Let's Encrypt will peform
-	separate validation for each of the domains, so be sure that your server is reachable at all of
-	them before attempting to get a certificate. 100 domains is the max.
-
-.PARAMETER Emails
-	Contact email address(es) to your real email address so Let's Encrypt can contact you if there
-	are any problems (or if the certificate is about to expire).
-
-.PARAMETER Renew
-	Renew the most recently used certificate.
-
-.PARAMETER InstallCertificate
-	Installs the most recently retrieved certificate. Useful if a certificate was successfully
-	retrieved, but something failed before it was installed.
-
-.PARAMETER Staging
-	Use Let's Encrypt Staging server and don't restart FileMaker Server service. Use this option for
-	testing/setup, but beware that the certificate will be imported, so you would either need to
-	restore the old certificate or call this script again without this parameter to install a
-	production certificate.
-
-.PARAMETER Force
-	When renewing, force renewal, even if certificate is not recommended for renewal yet.
-	When using Staging parameter, force FMS to restart.
-
-.PARAMETER ScheduleTask
-	Schedule a task via Windows Task Scheduler to renew the certificate automatically.
-
-.PARAMETER IntervalDays
-	When scheduling a task, specify an interval to repeat on. Default is 63 days because:
-		- Let's Encrypt's recommendation is to renew when a certificate has a third of it's total
-		  lifetime left.
-		- if interval is divisible by 7, then it will always occur on the same day of the week
-
-.PARAMETER Time
-	When scheduling a task, specify a time of day to run it. Can optionally specify the exact
-	date/time of the first schedule.
-
-.PARAMETER ConfigureEmail
-	Store credentials and SMTP info so this script can send logs when it runs.
-
 .NOTES
-	File Name:   GetSSL.ps1
 	Author:      Daniel Smith dan@filemaker.consulting
 	Revised:     2020-03-05
 	Version:     2.0.0-beta2
@@ -133,48 +80,107 @@
 
 [cmdletbinding(SupportsShouldProcess=$true,ConfirmImpact='High',DefaultParameterSetName='InstallDependencies')]
 Param(
+	<#
+		Install all dependent libraries; restart may be required if .NET is updated. Run this once
+		before using this script for the first time. This action is performed if no parameters sent to
+		the script.
+		Include the -Force parameter to update dependencies.
+	#>
 	[Parameter(ParameterSetName='InstallDependencies')]
 	[switch] $InstallDependencies,
 
-
+	
+	<#
+		Store new domains and emails, or modify them, then get and install a certificate. This is
+		intended to be run with a user at the console so they can enter fmsadmin credentials, if needed.
+	#>
 	[Parameter(ParameterSetName='Setup')]
 	[switch] $Setup,
 
+	<#
+		Array of domain(s) for which you would like an SSL Certificate. Let's Encrypt will peform
+		separate validation for each of the domains, so be sure that your server is reachable at all of
+		them before attempting to get a certificate. 100 domains is the max.
+	#>
 	[Parameter(ParameterSetName='Setup',Mandatory=$True,Position=1)]
 	[Alias('d')]
 	[string[]] $Domains,
 
+	<#
+		Contact email address(es) to your real email address so Let's Encrypt can contact you if there
+		are any problems (or if the certificate is about to expire).
+	#>
 	[Parameter(ParameterSetName='Setup',Mandatory=$True,Position=2)]
 	[Alias('e')]
 	[string[]] $Emails,
 
 
+	<#
+		Installs the most recently retrieved certificate. Useful if a certificate was successfully
+		retrieved, but something failed before it was installed.
+	#>
 	[Parameter(ParameterSetName='InstallCertificate')]
 	[switch] $InstallCertificate,
 
 
+	<# Schedule a task via Windows Task Scheduler to renew the certificate automatically. #>
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('s')]
 	[switch] $ScheduleTask,
 
+	<#
+		When scheduling a task, specify an interval to repeat on. Default is 63 days because:
+		  - Let's Encrypt's recommendation is to renew when a certificate has a third of it's total
+		    lifetime left.
+		  - if interval is divisible by 7, then it will always occur on the same day of the week
+	#>
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('i')]
 	[string] $IntervalDays=63,
 
+	<#
+		When scheduling a task, specify a time of day to run it. Can optionally specify the exact
+		date/time of the first schedule. Value should be a PowerShell DateTime object, or a string
+		that can be converted to DateTime.
+	#>
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('t')]
 	[DateTime] $Time="4:00am",
 
 
+	<# Renew the most recently used certificate. #>
 	[Parameter(ParameterSetName='Renew')]
 	[switch] $Renew,
 
 
+	<# Store credentials and SMTP info so this script can send logs when it runs. #>
 	[Parameter(ParameterSetName='ConfigureEmail')]
 	[switch] $ConfigureEmail,
 
 
+	<#
+		Use Let's Encrypt Staging server and don't restart FileMaker Server service. Use this option for
+		testing/setup, but beware that the certificate will be imported, so you would either need to
+		restore the old certificate or call this script again without this parameter to install a
+		production certificate.
+		Include the Force parameter to also restart FileMaker Server, which is a more complete test.
+	#>
+	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='InstallCertificate')]
+	[Parameter(ParameterSetName='ScheduleTask')]
+	[Parameter(ParameterSetName='Renew')]
 	[switch] $Staging,
+
+	<#
+		When installing dependencies, re-install (or update) even if they are already installed.
+		When renewing, force renewal even if certificate is not recommended for renewal yet.
+		When using Staging parameter, force FMS to restart.
+	#>
+	[Parameter(ParameterSetName='InstallDependencies')]
+	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='InstallCertificate')]
+	[Parameter(ParameterSetName='ScheduleTask')]
+	[Parameter(ParameterSetName='Renew')]
 	[switch] $Force
 )
 
