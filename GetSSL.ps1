@@ -2,63 +2,10 @@
 .SYNOPSIS
 	Get an SSL certificate from Let's Encrypt and install it on FileMaker Server.
 
-.PARAMETER Domains
-	Array of domain(s) for which you would like an SSL Certificate.
-	Let's Encrypt will peform separate validation for each of the domains,
-	so be sure that your server is reachable at all of them before
-	attempting to get a certificate. 100 domains is the max.
-
-.PARAMETER Email
-	Contact email address to your real email address so that Let's Encrypt
-	can contact you if there are any problems.
-
-.PARAMETER FMSPath
-	Path to your FileMaker Server directory, ending in a backslash. Only
-	necessary if installed in a non-default location.
-
-.PARAMETER Staging
-	Use Let's Encrypt Staging server and don't restart FileMaker Server service.
-	Use this option for testing/setup, but beware that the certificate will be
-	imported, so you would either need to restore the old certificate or
-	call this script again without this parameter to install a production
-	certificate.
-
-.PARAMETER Logging
-	Enable or disable logging. Default is to enable if not called from
-	PowerShell Integrated Scripting Environment (ISE).
-
-.PARAMETER LogDirectory
-	Folder to put logs. Default is a folder named the same as this script in
-	a Documents directory that is a sibling to this scripts parent directory.
-	In other words: Documents directory when this script is in FMS Scripts
-	directory.
-
-.PARAMETER LogsToKeep
-	Number of log files to keep in LogDirectory. Oldest will be deleted if
-	there are more than this number.
-
-.PARAMETER ScheduleTask
-	Schedule a task via Windows Task Scheduler to renew the certificate
-	automatically via Windows Task Scheduler.
-
-.PARAMETER IntervalDays
-	When scheduling a task, specify an interval to repeat on. Default is 63
-	days because:
-		- Let's Encrypt's recommendation is to renew when a certificate has a
-		  third of it's total lifetime left.
-		- if interval is divisible by 7, then it will always occur on the same
-		  day of the week
-
-.PARAMETER Time
-	When scheduling a task, specify a time of day to run it. Can optionally
-	specify the exact date/time of the first schedule.
-
 .NOTES
-	File Name:   GetSSL.ps1
-	Author:      David Nahodyl contact@bluefeathergroup.com, modified by Daniel Smith dan@filemaker.consulting
-	Created:     2016-10-08
-	Revised:     2018-11-08
-	Version:     1.1-DS
+	Author:      Daniel Smith dan@filemaker.consulting
+	Revised:     2020-05-11
+	Version:     2.0.0
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -66,105 +13,139 @@
 .LINK
 	http://bluefeathergroup.com/blog/how-to-use-lets-encrypt-ssl-certificates-with-filemaker-server/
 
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com
-
-	Simplest call with domain to sign listed first and email second.
+.LINK
+	https://github.com/rmbolger/Posh-ACME/wiki/%28Advanced%29-Manual-HTTP-Challenge-Validation
 
 .EXAMPLE
-	.\GetSSL.ps1 test.com, sub.example.com user@test.com
-
-	Multiple domains can be listed, separated by commas.
-
-.EXAMPLE
-	.\GetSSL.ps1 -d test.com -e user@test.com
-
-	Can use short-hand parameter names.
-
-.EXAMPLE
-	.\GetSSL.ps1 -Domain test.com -Email user@test.com
-
-	Or full parameter names.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -FMSPath "X:\FileMaker Server\"
-
-	Use if you installed FileMaker Server in a non-default path.
-	Must end in a backslash.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -Confirm:$False
-
-	Don't ask for confirmation; use the -Confirm:$False parameter when called from a scheduled task.
-	To have this script run silently, it must also be able to perform fmsadmin.exe without asking for username and password. There are two ways to do that:
-		1. Add a group name that is allowed to access the Admin Console and run the script as a user that belongs to the group.
-		2. Hard-code the username and password into this script. (NOT RECOMMENDED)
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -WhatIf
+	.\GetSSL.ps1 -Setup test.com user@test.com -WhatIf
 
 	Display the inputs, then exit; use to verify you passed parameters in the correct format
 
 .EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask
+	.\GetSSL.ps1 -Renew -Confirm:0
 
-	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days.
+	Don't ask for confirmation; use this parameter when called from a scheduled task.
 
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -IntervalDays 70
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 70 days
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -Time 1:00am
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days at 1:00am.
-
-.EXAMPLE
-	.\GetSSL.ps1 test.com user@test.com -ScheduleTask -Time "1/1/2018 1:00am"
-
-	Schedule a task via Windows Task Scheduler to renew the certificate every 63 days starting Jan 1st 2018 at 1:00am.
+	To have this script run silently, it must also be able to perform fmsadmin.exe without asking for username and password. There are two ways to do that:
+	  1. Add a group name that is allowed to access the Admin Console and run the script as a user
+	     that belongs to the group.
+	  2. Run this script with the Setup parameter the first time you use it and enter your admin
+	     console credentials when it asks you.
 #>
 
 
-[cmdletbinding(SupportsShouldProcess=$true,ConfirmImpact='High')]
+[cmdletbinding(SupportsShouldProcess=$true,ConfirmImpact='High',DefaultParameterSetName='InstallDependencies')]
 Param(
-	[Parameter(Mandatory=$True,Position=1)]
+	<#
+		Install all dependent libraries; restart may be required if .NET is updated. Run this once
+		before using this script for the first time. This action is performed if no parameters sent to
+		the script.
+		Include the -Force parameter to update dependencies.
+	#>
+	[Parameter(ParameterSetName='InstallDependencies')]
+	[switch] $InstallDependencies,
+
+	
+	<#
+		Store new domains and emails, or modify them, then get and install a certificate. This is
+		intended to be run with a user at the console so they can enter fmsadmin credentials, if needed.
+	#>
+	[Parameter(ParameterSetName='Setup')]
+	[switch] $Setup,
+
+	<#
+		Array of domain(s) for which you would like an SSL Certificate. Let's Encrypt will peform
+		separate validation for each of the domains, so be sure that your server is reachable at all of
+		them before attempting to get a certificate. 100 domains is the max.
+	#>
+	[Parameter(ParameterSetName='Setup',Mandatory=$True,Position=1)]
 	[Alias('d')]
 	[string[]] $Domains,
 
-	[Parameter(Mandatory=$True,Position=2)]
+	<#
+		Contact email address(es) to your real email address so Let's Encrypt can contact you if there
+		are any problems (or if the certificate is about to expire).
+	#>
+	[Parameter(ParameterSetName='Setup',Mandatory=$True,Position=2)]
 	[Alias('e')]
-	[string] $Email,
+	[string[]] $Emails,
 
-	[Parameter(Position=3)]
-	[Alias('p')]
-	[string] $FMSPath = 'C:\Program Files\FileMaker\FileMaker Server\',
 
-	[switch] $Staging=$False,
+	<#
+		Installs the most recently retrieved certificate. Useful if a certificate was successfully
+		retrieved, but something failed before it was installed.
+	#>
+	[Parameter(ParameterSetName='InstallCertificate')]
+	[switch] $InstallCertificate,
 
-	[switch] $Logging = -not $host.name.contains('ISE') ,
 
-	[int] $LogsToKeep = 50 ,
-
-	[string] $LogDirectory = "$(Split-Path $(Split-Path (Get-Variable MyInvocation -Scope 0).Value.MyCommand.Path))\Documents\$($MyInvocation.MyCommand.Name)",
-
+	<# Schedule a task via Windows Task Scheduler to renew the certificate automatically. #>
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('s')]
-	[switch] $ScheduleTask=$False,
+	[switch] $ScheduleTask,
 
+	<#
+		When scheduling a task, specify an interval to repeat on. Default is 63 days because:
+		  - Let's Encrypt's recommendation is to renew when a certificate has a third of it's total
+		    lifetime left.
+		  - if interval is divisible by 7, then it will always occur on the same day of the week
+	#>
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('i')]
 	[string] $IntervalDays=63,
 
+	<#
+		When scheduling a task, specify a time of day to run it. Can optionally specify the exact
+		date/time of the first schedule. Value should be a PowerShell DateTime object, or a string
+		that can be converted to DateTime.
+	#>
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Alias('t')]
-	[DateTime] $Time="4:00am"
-)
+	[DateTime] $Time="4:00am",
 
+
+	<# Renew the most recently used certificate. #>
+	[Parameter(ParameterSetName='Renew')]
+	[switch] $Renew,
+
+
+	<# Store credentials and SMTP info so this script can send logs when it runs. #>
+	[Parameter(ParameterSetName='ConfigureEmail')]
+	[switch] $ConfigureEmail,
+
+
+	<#
+		Use Let's Encrypt Staging server and don't restart FileMaker Server service. Use this option for
+		testing/setup, but beware that the certificate will be imported, so you would either need to
+		restore the old certificate or call this script again without this parameter to install a
+		production certificate.
+		Include the Force parameter to also restart FileMaker Server, which is a more complete test.
+	#>
+	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='InstallCertificate')]
+	[Parameter(ParameterSetName='ScheduleTask')]
+	[Parameter(ParameterSetName='Renew')]
+	[switch] $Staging,
+
+	<#
+		When installing dependencies, re-install (or update) even if they are already installed.
+		When renewing, force renewal even if certificate is not recommended for renewal yet.
+		When using Staging parameter, force FMS to restart.
+	#>
+	[Parameter(ParameterSetName='InstallDependencies')]
+	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='InstallCertificate')]
+	[Parameter(ParameterSetName='ScheduleTask')]
+	[Parameter(ParameterSetName='Renew')]
+	[switch] $Force
+)
 
 <# Exit immediately on error #>
 $ErrorActionPreference = "Stop"
+
+
+#########################################################################################################################
+# Functions
 
 function Backup-File {
 	Param(
@@ -178,52 +159,621 @@ function Backup-File {
 	Copy-Item $path $BackupDirectory
 }
 
-function Confirm-FMSAccess {
-<#
-	.SYNOPSIS
-		Determine if user has to enter username and password to perform fmsadmin.exe
+function Get-ScriptLineNumber { return $MyInvocation.ScriptLineNumber }
 
-	.OUTPUTS
-		Boolean $true if user can access fmsadmin.exe
-#>
-	Param(
-		[Parameter(Position=1)]
-		[Alias('u')]
-		[string]$username = $null,
-
-		[Parameter(Position=2)]
-		[Alias('p')]
-		[string]$password = $null,
-
-		[string]$fmsadmin = 'C:\Program Files\FileMaker\FileMaker Server\Database Server\fmsadmin.exe',
-
-		[int]$timout = 3
-	)
-
-	$userAndPassParamString = $null
-	if ($username -and $password) {
-		$userAndPassParamString = "-u $username -p $password"
-	}
-	$Process = Start-Process -FilePath $fmsadmin -ArgumentList "list files $userAndPassParamString" -PassThru -WindowStyle Hidden
+function Send-Email ($subject, $body) {
+	$result = ""
 	try {
-		Wait-Process -InputObject $Process -Timeout $timout -ErrorAction Stop
-		if ($Process.ExitCode) {
-			if ($Process.ExitCode -eq 10502) {
-				Write-Debug "Error code 10502 likely means the server was not started"
+		$credentials = Get-StoredCredential -Target "GetSSL Send Email"
+		if ($credentials) {
+			$smtpInfo = (Get-StoredCredential -AsCredentialObject -Target "GetSSL Send Email").Comment | ConvertFrom-Json
+			if (! $Emails) {
+				$Emails = ((Get-PAAccount).contact).Replace('mailto:','')
 			}
-			return $false
+			if ($smtpInfo) {
+				Send-MailMessage -Subject $subject -Body $body -Encoding UTF8 -Credential $credentials -To $Emails `
+					-From $smtpInfo.from `
+					-SmtpServer $smtpInfo.server `
+					-Port $smtpInfo.port `
+					-UseSsl:$smtpInfo.useSSL
+				$result = "email sent"
+			} else {
+				$result = "email could not be sent; no credentials loaded"
+			}
 		}
-		return $true
+		$credentials = $null
 	}
 	catch {
-		# If process exceeded timeout, assume it asked user for credentials, but since the window was hidden, user
-		# could not see/enter them, therefor they don't have access to fmsadmin.exe without providing credentials.
-		$Process | Stop-Process -Force
-		return $false
+		# don't let this stop the script from continuing
+		$result = ($_ | Out-String)
+		$result += "Stack Trace:`r`n"
+        $result += $_.ScriptStackTrace
+	}
+	return $result
+}
+
+function Install-Dependencies {
+	$PackageProvider = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction:Ignore
+	if (-not($PackageProvider) -or ($PackageProvider.Version -lt [System.Version]"2.8.5.201")) {
+		Write-Output "installing NuGet package provider"
+		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+	}
+
+	if ((Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full").Release -lt 461308) {
+		if ($PSCmdlet.ShouldProcess(
+			"[OPTIONAL] Update Dot Net Framework to latest version, so the main branch of Posh-ACME can be used? Restart will likely be required which you can choose to do later, but won't be able to proceed with certificate installation until you do.",
+			"[OPTIONAL] Update Dot Net Framework to latest version, so the main branch of Posh-ACME can be used? Restart will likely be required which you can choose to do later, but won't be able to proceed with certificate installation until you do.",
+			"Update Dot Net Framework?"
+		)) {
+			# https://docs.microsoft.com/en-us/dotnet/framework/deployment/deployment-guide-for-developers
+			$dlurl = 'https://go.microsoft.com/fwlink/?LinkId=2085155'
+			$installerPath = Join-Path $env:TEMP ndp48-web.exe
+			Invoke-WebRequest $dlurl -OutFile $installerPath
+			Start-Process -FilePath $installerPath -Wait -Args "/passive /promptrestart"
+			# Am assuming the computer will have to restart and this script run again at this point
+		}
+	}
+
+	if ((Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full").Release -lt 461308) {
+		if ($Force -or -not(Get-Module -Listavailable -Name Posh-ACME.net46)) {
+			Write-Output "Install Posh-ACME.net46"
+			Install-Module -Name Posh-ACME.net46 -AllowClobber -Confirm:$false -Force
+		}
+	} else {
+		if ($Force -or -not(Get-Module -Listavailable -Name Posh-ACME)) {
+			Write-Output "Install Posh-ACME"
+			Install-Module -Name Posh-ACME -AllowClobber -Confirm:$false -Force
+		}
+	}
+
+	if ($Force -or -not(Get-Module -Listavailable -Name CredentialManager)) {
+		Write-Output "Install CredentialManager"
+		Install-Module -Name CredentialManager -AllowClobber -Confirm:$false -Force
+	}
+}
+
+function Install-Cert {
+	<# validate FMSPath #>
+	if (-not(Test-Path $fmsadmin)) {
+		throw "fmsadmin could not be found at: '$fmsadmin', please check the FMSPath parameter: '$FMSPath'"
+	}
+
+	Write-Output "Confirming access to fmsadmin.exe: ______________________________________________"
+	<# FileMaker Server must be started to import a certificate (and to confirm access) #>
+	if ((Get-Service "FileMaker Server").Status  -ne "Running") {
+		Write-Output "FileMaker Server service was not running, it will be started now"
+		Start-Service "FileMaker Server"
+		Start-Sleep 2 # give the service a few seconds to start before testing if fmserver is running
+	}
+	if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
+		Write-Output "FileMaker Server process was not running, it will be started now"
+		Invoke-FMSAdmin start, server -Timeout 90
+		Start-Sleep -Seconds 1
+		if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
+			throw ("server process still not running after starting it; check FileMaker logs to see what's wrong")
+		}
+		if ($externalAuth) {
+			# Sometimes external authentication fails right after starting server; trigger that failure here
+			Test-FMSAccess
+		}
+	}
+	
+	# stored credentials take precedence over external authentication
+	$fmsCredential = Get-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -AsCredentialObject
+	if ($fmsCredential) {
+		$username = $fmsCredential.UserName
+		$password = $fmsCredential.Password
+		if ($username -and $password) {
+			$userAndPassParamString = "-u ""$username"" -p ""$password"""
+			Write-Output "retrieved stored credentials"
+			$FMAccessConfirmed = Test-FMSAccess
+		}
+		$fmsCredential = $username = $password = $null
+	} else {
+		Write-Output "no credentials were stored"
+	}
+
+	if (! $FMAccessConfirmed) {
+		$externalAuth = Test-FMSAccess
+		if (! $externalAuth) {
+			# I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
+			Start-Sleep -Seconds 1
+			<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
+			   authentication, check again to be sure it's for real.
+			   https://community.filemaker.com/message/803496 #>
+			$externalAuth = Test-FMSAccess
+		}
+		if ($externalAuth) {
+			$FMAccessConfirmed = $true
+			Write-Output "external authentication credentials used"
+		}
+	}
+
+	if ($FMAccessConfirmed) {
+		Write-Output "confirmed"
+	} elseif (Test-IsInteractiveShell) {
+		Write-Output "no access via stored credentials or external authentication"
+		Write-Output "A window will open where you can securely enter your fmsadmin login. Sometimes it takes a moment to open."
+		while ($True) {
+			$fmsCredential = Get-Credential -Message "FileMaker Server Admin Console Sign In" | New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine
+			if ($fmsCredential) {
+				$username = $fmsCredential.UserName
+				$password = $fmsCredential.Password
+				$userAndPassParamString = "-u ""$username"" -p ""$password"""
+				$fmsCredential = $username = $password = $null
+				$FMAccessConfirmed = Test-FMSAccess
+				if ($FMAccessConfirmed) {
+					break
+				} else {
+					Write-Output "That account didn't work, please try again."
+				}
+			} else {
+				throw ("Permissions not setup to allow performing fmsadmin.exe without entering username and password.")
+			}
+		}
+			
+	} else {
+		throw ( "no access! Must be able to perform fmsadmin without entering user/pass when this script is not run interactively" )
+	}
+	Write-Output ""
+
+
+	Write-Output "Get certificate: ________________________________________________________________"
+	$certObj = Get-PACertificate
+	if (! $certObj) { throw "no certificate found" }
+
+	Write-Output "Export the private key"
+	$keyPath = Join-Path $FMSPath 'CStore\serverKey.pem'
+	if (Test-Path $keyPath) {
+		Backup-File $keyPath
+		Remove-Item $keyPath
+	}
+	Copy-Item ($certObj.KeyFile) $keyPath
+	Write-Output ""
+
+	$serverCustomPath = Join-Path $FMSPath 'CStore\serverCustom.pem'
+	if (Test-Path $serverCustomPath) {
+		Backup-File $serverCustomPath
+		Write-Output ""
+	}
+
+
+	Write-Output "Import certificate via fmsadmin: ________________________________________________"
+	Invoke-FMSAdmin certificate, import, """$($certObj.CertFile)""", --intermediateCA, """$($certObj.FullChainFile)""", -y
+	Write-Output ""
+
+
+	Write-Output "Stop FileMaker Server: __________________________________________________________"
+	if ($Staging -and !$Force) {
+		Write-Output "skipped because -Staging parameter was provided"
+	} else {
+		$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
+		Write-Output "check if files are open first"
+		try { $FilesWereOpen = Invoke-FMSAdmin list, files -Timeout 5 }
+		catch [System.TimeoutException] {
+			Write-Output "failed to list files within 5 seconds"
+			Write-Output "assume files are open since it's safer than the alternative"
+			$FilesWereOpen = $true
+		}
+		if ($FilesWereOpen) {
+			Write-Output "files are open"
+		} else {
+			Write-Output "no files open"
+		}
+		Write-Output "now stop server"
+		<# Try to stop server multiple times, if necessary. #>
+		$retries = 3
+		$timeout = 90
+		while ($true) {
+			$retries--
+			try {
+				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+				# first timeout is sent to fmsadmin, to give users this amount of time to close files before they are forcibly closed
+				# second timeout is to forcibly stop the fmsadmin command in case it hangs
+				Invoke-FMSAdmin stop, server, -y, -t, $timeout -Timeout ($timeout + 20)
+				break
+			}
+			catch [System.TimeoutException] {
+				if ($retries -gt 0) {
+					Write-Output "  timed out, $retries attempt(s) left before aborting"
+					$timeout *= 2
+				} else { throw }
+			}
+			catch [System.ApplicationException] {
+				if ($_.Exception.Message.StartsWith("fmsadmin")) {
+					if (($_.Exception.Data.ExitCode) -eq 10002) {
+						if ($retries -gt 0) {
+							Write-Output "  fmsadmin timed out, $retries attempt(s) left before aborting"
+							$timeout *= 2
+						} else { throw }
+					}
+					elseif (($_.Exception.Data.ExitCode) -eq 10502) {
+						Write-Output "10502 (Host unreachable) occurs when the service or server is stopped"
+						break
+					} else { throw }
+				} else { throw }
+			}
+		}
+		$mustStartServer = $True
+	}
+	Write-Output ""
+
+
+	Write-Output "Restart the FMS service: ________________________________________________________"
+	if ($Staging -and !$Force) {
+		Write-Output "skipped because -Staging parameter was provided"
+	} else {
+		Restart-Service "FileMaker Server"
+	}
+	Write-Output ""
+
+
+	<# Just in case server isn't configured to start automatically #>
+	Write-Output "Start FileMaker Server: _________________________________________________________"
+	if ($Staging -and !$Force) {
+		Write-Output "skipped because -Staging parameter was provided"
+	} else {
+		<# Try to start server multiple times, if necessary. I'm not sure, but I suspect fmsadmin
+		   sometimes asks for credentials here, which causes the script to fail #>
+		$retries = 3
+		$timeout = 90
+		while ($true) {
+			$retries--
+			try {
+				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+				Invoke-FMSAdmin start, server -Timeout $timeout
+				break
+			}
+			catch [System.TimeoutException] {
+				if ($retries -gt 0) {
+					Write-Output "  timed out, $retries attempt(s) left before aborting"
+					$timeout *= 2
+				} else { throw }
+			}
+			catch [System.ApplicationException] {
+				# NOTE: Error: 10007 (Requested object does not exist) occurs when service is stopped
+				if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
+					Write-Output "(If server is set to start automatically, error 10006 is expected)"
+					break
+				} else { throw }
+			}
+		}
+
+		$mustStartServer = $False
+		if ($WPEWasRunning -and -not(Get-Process fmscwpc -ErrorAction:Ignore)) {
+			<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes running the same bit depth as PowerShell #>
+			Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
+			Invoke-FMSAdmin start, wpe
+			Write-Output "done starting WPE"
+		}
+		if ($FilesWereOpen) {
+			Write-Output "files were open, confirm access to fmsadmin"
+			<# Confirm FMAccess again, since it can ask for a password again after starting
+			   server. Do it twice; first time will likely fail, second time should succeed.
+			   https://community.filemaker.com/thread/191306 #>
+			Start-Sleep -Seconds 3 # if the next check is too soon after starting server, it will fail
+			$FMAccessConfirmedAfterRestart = Test-FMSAccess
+			if (-not ($FMAccessConfirmedAfterRestart)) {
+				# NOTE: I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
+				Start-Sleep -Seconds 1
+				<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
+				   authentication, check again to be sure it's for real.
+				   https://community.filemaker.com/message/803496 #>
+				$FMAccessConfirmedAfterRestart = Test-FMSAccess
+			}
+			if ($FMAccessConfirmedAfterRestart) {
+				Write-Output "check if files are open now"
+				try { $FilesAreOpen = Invoke-FMSAdmin list, files -Timeout 5 }
+				catch [System.TimeoutException] {
+					Write-Output "failed to list files within 5 seconds"
+					Write-Output "assume files are not open since it's safer than the alternative"
+					$FilesAreOpen = $false
+				}
+				if(-not($FilesAreOpen)) {
+					Write-Output "open files because they were open before FMS was stopped, but aren't now:"
+					Invoke-FMSAdmin open
+				} else {
+					Write-Output "they are"
+				}
+			} else {
+				throw "could not connect to fmsadmin"
+			}
+		}
+	}
+	Write-Output "done"
+	Write-Output ""
+}
+
+function Invoke-FMSAdmin {
+<#
+	.SYNOPSIS
+		Calls fmsadmin.exe with specified parameters and will prevent it from hanging a script
+		if it waits for user input.
+
+	.OUTPUTS
+		Returns standard output from fmsadmin.
+
+		fmsadmin errors will throw an exception which contains the exit code.
+
+	.PARAMETER Parameters
+		List of parameters to send to fmsadmin. Parameters with a space must be a quoted string.
+
+	.PARAMETER Timeout
+		Seconds to wait for the process before failing with an error.
+		Will throw [System.TimeoutException] if fmsadmin does not complete within this time.
+
+	.EXAMPLE
+		Invoke-FMSAdmin list, files
+
+	.EXAMPLE
+		Invoke-FMSAdmin list, files -Timeout 5
+
+	.EXAMPLE
+		Invoke-FMSAdmin open, """File With Spaces"""
+		Invoke-FMSAdmin open, """$fileNameWithSpaces"""
+
+	.EXAMPLE
+		Invoke-FMSAdmin stop, server, -t, 30
+		Invoke-FMSAdmin stop, server, "-t 30"
+
+		Either of these formats will work
+
+	.EXAMPLE
+		try { Invoke-FMSAdmin bad, command }
+		catch [System.ApplicationException] {
+			if ($_.Exception.Message.StartsWith("fmsadmin")) {
+				$_.Exception.Data.ExitCode
+			} else {
+				# was not an fmsadmin-specific exception, so throw it back
+				throw
+			}
+		}
+#>
+	Param(
+		[Parameter(Mandatory=$false,ValueFromPipeline=$true,Position=1)]
+		[string[]] $Parameters,
+		
+		[int]$Timeout = 30
+	)
+	# https://stackoverflow.com/a/36539226
+	$pinfo = New-Object System.Diagnostics.ProcessStartInfo
+	$pinfo.FileName = $fmsadmin
+	$pinfo.RedirectStandardError = $true
+	$pinfo.RedirectStandardOutput = $true
+	$pinfo.UseShellExecute = $false # must be false to redirect IO streams
+	$pinfo.Arguments = "$Parameters $userAndPassParamString"
+	$pinfo.CreateNoWindow = $true
+
+	$p = New-Object System.Diagnostics.Process
+	$p.StartInfo = $pinfo
+
+	[Void]$p.Start()
+
+	$stdoutTask = $p.StandardOutput.ReadToEndAsync();
+	$stderrTask = $p.StandardError.ReadToEndAsync();
+
+	[Void]$p.WaitForExit($Timeout * 1000)
+
+	if (! $p.HasExited) {
+		$p.Kill()
+		$p.Close()
+		throw [System.TimeoutException] "fmsadmin did not complete within timeout of $Timeout seconds`n$fmsadmin $Parameters"
+	}
+
+	$stdout = $stdoutTask.Result;
+	$stderr = $stderrTask.Result;
+
+	if ($p.ExitCode) {
+		Write-Verbose "$fmsadmin $Parameters" -Verbose
+		if ($stderr) {
+			# NOTE: I don't think fmsadmin uses stderr, but I'd rather include it to be safe
+			Write-Host "stderr: $stderr"
+		}
+		if ($stdout) {Write-Verbose $stdout -Verbose}
+
+		$e = [System.ApplicationException]::New("fmsadmin exit code: " + $p.ExitCode)
+		$e.Data.Add('ExitCode', $p.ExitCode)
+		throw $e
+	}
+
+	if ($stderr) {
+		# NOTE: I don't think fmsadmin uses stderr, but I'd rather include it to be safe
+		Write-Verbose "$fmsadmin $Parameters" -Verbose
+		Write-Error "stderr: $stderr"
+	}
+	return $stdout
+}
+
+function New-Cert {
+	if (! $account) {
+		Write-Output "Account Setup ___________________________________________________________________"
+		$accounts = Get-PAAccount -List -Contact $Emails -Status valid
+		if ($accounts) {
+			# valid account(s) already exist for this email
+			if ($accounts -is [array]) {
+				Write-Output "multiple accounts found; selected the last one"
+				$account = $accounts[-1]
+			} else {
+				Write-Output "selected an existing account"
+				$account = $accounts
+			}
+			Set-PAAccount -ID $account.id
+		} else {
+			Write-Output "create new account"
+			$account = New-PAAccount -Contact $Emails -AcceptTos
+		}
+		($account | Select-Object id, status, contact, location | Format-List | Out-String).Trim()
+		Write-Output ""
+	}
+
+
+	Write-Output "Create an Order _________________________________________________________________"
+	New-PAOrder $Domains -Force:$Force
+	$order = Get-PAOrder
+	if (-not $order) {
+		throw "No order found. This should never be able to happen."
+	} elseif ($order.status -eq "valid") {
+		Write-Output "Order has already been completed; previous certificate will be used."
+		Write-Output "Use the -Force parameter to always issue a new certificate here."
+		Write-Output ""
+		return
+	}
+	Write-Output ""
+
+
+	Write-Output "Authorizations and Challenges ___________________________________________________"
+	$acmeChallengePath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge'
+	if (! (Test-Path $acmeChallengePath)) {
+		Write-Output "Create acme-challenge directory"
+		(New-Item -Path $acmeChallengePath -ItemType Directory).ToString().Trim()
+	}
+
+	$webConfigPath = Join-Path $acmeChallengePath "web.config"
+	if (! (Test-Path $webConfigPath)) {
+		Write-Output "Create web.config file"
+		'<configuration><system.webServer><staticContent><remove fileExtension="." /><mimeMap fileExtension="." mimeType="text/plain" /></staticContent></system.webServer></configuration>' | Out-File $webConfigPath
+	}
+
+	Write-Output "Create challenge file(s)"
+	$auths = $order | Get-PAAuthorizations
+	foreach ($auth in $auths) {
+		$path = Join-Path $acmeChallengePath $auth.HTTP01Token
+		$body = Get-KeyAuthorization $auth.HTTP01Token $account
+		$body | Out-File -Encoding ascii -FilePath $path
+	}
+
+	# Send all challenges at once
+	$auths.HTTP01Url | Send-ChallengeAck
+
+	Write-Output "Wait for LE to validate"
+	# https://tools.ietf.org/html/rfc8555#section-7.1.6
+	# Once the authorization is in the "valid" state, it can expire ("expired"), be deactivated by the client ("deactivated", see Section 7.5.2), or revoked by the server ("revoked")
+	Write-Output (Get-Date).ToLongTimeString()
+	$timeout = New-TimeSpan -Minutes 1
+	$sw = [diagnostics.stopwatch]::StartNew()
+	do {
+		if ($sw.elapsed -gt $timeout) {
+			$auths
+			throw ("authorization was not processed before timing out")
+		}
+
+		<# I tested with 1ms sleep and it was valid on the first iteration,
+		   but to be curtious to LE's server's, I set it to sleep for 1 second #>
+		Start-Sleep -Seconds 1
+		$auths = $order | Get-PAAuthorizations
+
+		# they start as pending then move to processing, then valid or invalid
+		$pending = $auths | Where-Object {($_.status -eq "pending") -or ($_.status -eq "processing")}
+		
+        Write-Progress "Wait for LE to validate" -SecondsRemaining $timeout.Subtract($sw.Elapsed).TotalSeconds
+	}
+	until (! $pending)
+	Write-Progress "Wait for LE to validate" -Complete
+	Write-Output "completed in $([math]::Round($sw.Elapsed.TotalSeconds)) seconds"
+	$notValid = $auths | Where-Object status -ne "valid"
+	$order = Get-PAOrder -Refresh
+	if ($notValid) {
+		Write-Output ""
+		($notValid | Format-List | Out-String).Trim()
+		($notValid.challenges.error | Format-List | Out-String).Trim()
+		($order | Format-List | Out-String).Trim()
+		throw ("unexpected status value")
+	}
+	if (($order.status -ne "ready") -and ($order.status -ne "valid")) {
+		($order | Format-List | Out-String).Trim()
+		throw ("order wasn't ready or valid, but should have been at this point in the script")
+	}
+	Write-Output "done"
+	Write-Output ""
+
+
+	Write-Output "Request Certificate _____________________________________________________________"
+	New-PACertificate $Domains -Force:$Force
+	$order = Get-PAOrder -Refresh
+	if ($order.status -ne "valid") {
+		$order | Format-List
+		throw ("order wasn't valid, but should have been at this point in the script")
+	}
+	if (! (Get-PACertificate)) {
+		throw ("certificate didn't exist, which shouldn't be able to happen given the above validations that already ran")
+	}
+	Write-Output ""
+}
+
+function Set-Server {
+	$Server = Get-PAServer
+	if (! $Server) {
+		if ($Staging) {
+			Write-Output "Select staging server"
+			Set-PAServer LE_STAGE
+		} else {
+			Write-Output "Select production server"
+			Set-PAServer LE_PROD
+		}
+	} else {
+		<# Make sure Staging matches Staging parameter #>
+		if ($Server.location.Contains('staging')) {
+			if ($Staging) {
+				Write-Output "correct server already selected"
+			} else {
+				Write-Output "Switch from Staging to Production"
+				Set-PAServer LE_PROD
+			}
+		} elseif ($Staging) {
+			Write-Output "Switch from Production to Staging"
+			Set-PAServer LE_STAGE
+		} else {
+			Write-Output "correct server already selected"
+		}
+	}
+}
+
+function Schedule-Task {
+	if ($Time.Date -eq $Start.Date) {
+		# Date contained in Time parameter was today, so add IntervalDays
+		$Time = $Time.AddDays($IntervalDays)
+	}
+	if ($PSCmdlet.ShouldProcess(
+		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}", #NOTE: shown with -WhatIf parameter
+		"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
+		"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
+	)) {
+		$StagingParameterAsText = if ($Staging) {"-Staging"}
+		$ForceParameterAsText = if ($Force) {"-Force"}
+		$Action = New-ScheduledTaskAction `
+			-Execute powershell.exe `
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText $ForceParameterAsText -Confirm:0"""
+
+		$Trigger = New-ScheduledTaskTrigger `
+			-Daily `
+			-DaysInterval $IntervalDays `
+			-At $Time
+
+		$Settings = New-ScheduledTaskSettingsSet `
+			-DontStopIfGoingOnBatteries `
+			-ExecutionTimeLimit 00:30
+
+		$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings `
+			-Description "Get an SSL certificate from Let's Encrypt and install it on FileMaker Server."
+
+		$TaskName = "GetSSL"
+
+		try {
+			Write-Output ("You will now be asked for your Windows password, you should trust this script before entering it. You can audit this section of code by reviewing line #{0} of {1}." -f (Get-ScriptLineNumber), (Split-Path $PSCommandPath -Leaf))
+			$credentials = Get-Credential `
+				-UserName $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+				-Message "Windows user to run the task"
+
+			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force `
+				-User $credentials.UserName `
+				-Password $credentials.GetNetworkCredential().Password
+		}
+		finally { $credentials = $null }
 	}
 }
 
 function Test-Administrator	{
+# NOTE: must be admin to create challenge file in hosted directory
 	$user = [Security.Principal.WindowsIdentity]::GetCurrent()
 	(New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 }
@@ -244,540 +794,356 @@ function Test-IsInteractiveShell {
 	return ([Environment]::UserInteractive -and (-not ([Environment]::GetCommandLineArgs() | ?{ $_ -like '-NonI*' })))
 }
 
-function Require-NuGet {
+function Test-FMSAccess {
 <#
 	.SYNOPSIS
-		Check if the required version of NuGet package provider is installed, install it if necessary.
+		Determine if user has to enter username and password to perform fmsadmin.exe
+		Alternatively, if $userAndPassParamString is set, will test if those credentials are valid.
+		(This is handled by the Invoke-FMSAdmin function)
+
+	.OUTPUTS
+		Boolean $true if user can access fmsadmin.exe
 #>
-	$PackageProvider = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction:Ignore
-	if (-not($PackageProvider) -or ($PackageProvider.Version -lt [System.Version]"2.8.5.201")) {
-		Write-Output "installing NuGet package provider"
-		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+	try {
+		Invoke-FMSAdmin list, files -Timeout 5 | Out-Null
+		return $true
+	}
+	catch {
+		# If process exceeded timeout, assume it asked user for credentials, but since the window was hidden, user
+		# could not see/enter them, therefor they don't have access to fmsadmin.exe without providing credentials.
+		return $false
 	}
 }
 
+#########################################################################################################################
+
 Try {
-	<# Save start date/time so it can be accessed repeatedly throughout the script #>
-	$Start = Get-Date
+	$Start = Get-Date # Save start date/time so it can be accessed repeatedly throughout the script
 
-	if ( $Logging ) {
-		If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory }
-		$LogFilePath = Join-Path $LogDirectory "\powershell $($Start.ToString("yyyy-MM-dd_HHmmss")).log"
-		Start-Transcript -Append -Path $LogFilePath
-		Write-Output ""
-	}
+	<# Options that are unlikely to need to be changed #>
+	[string] $FMSPath = 'C:\Program Files\FileMaker\FileMaker Server\'
+	[int]    $LogsToKeep = 50
+	[switch] $Logging = -not $host.name.contains('ISE')
+	[string] $LogDirectory = Join-Path $FMSPath ('Data\Documents\' + (Split-Path $PSCommandPath -Leaf))
+	[string] $fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
+	$externalAuth = '' # declare as script-level variable
+	$userAndPassParamString = '' # declare as script-level variable (set user/pass here if you want to hard-code it in your script)
 
-	$fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
-
-	<# Display user input #>
-	Write-Output $Start.ToString("F")
-	Write-Output ""
-	Write-Output "  domains:      $($Domains -join ', ')"
-	Write-Output "  email:        $Email"
-	Write-Output "  FMSPath:      $FMSPath"
-	Write-Output "  Staging:      $Staging"
-	Write-Output "  Logging:      $Logging"
-	if ( $Logging ) {
-	Write-Output "  LogDirectory: $LogDirectory"
-	Write-Output "  LogsToKeep:   $LogsToKeep"
-	}
-	Write-Output ""
-
-
-	<# validate FMSPath #>
-	if (-not(Test-Path $fmsadmin)) {
-		throw "fmsadmin could not be found at: '$fmsadmin', please check the FMSPath parameter: '$FMSPath'"
-	}
-
-	<# Check to make sure we're running as admin #>
 	if (-not (Test-Administrator)) {
 		throw 'This script must be run as Administrator'
 	}
-
-	<# Server must be started to import a certificate or confirm access #>
-	if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
-		Write-Output "FileMaker Server process was not running, it will be started now"
-		& $fmsadmin start server
-		if (! $?) { throw ("failed to start server, error code " + $LASTEXITCODE) }
-		Start-Sleep -Seconds 1
-		if (-not(Get-Process fmserver -ErrorAction:Ignore)) {
-			throw ("server process still not running after starting it; check FileMaker logs to see what's wrong")
-		}
-		<# Sometimes external authentication fails right after starting server; trigger that failure here #>
-		Confirm-FMSAccess -fmsadmin $fmsadmin -Timout 1
+	
+	if ($Logging) {
+		If ( -not (Test-Path $LogDirectory) ) { New-Item -ItemType directory -Path $LogDirectory | Out-Null}
+		$LogFilePath = Join-Path $LogDirectory "\powershell $($Start.ToString("yyyy-MM-dd_HHmmss")).log"
+		Start-Transcript -Append -Path $LogFilePath
 	}
 
-	Write-Output "Attempt to load credentials from Credential Manager"
-	$userAndPassParamString = $null
-	if (-not(Get-Module -Listavailable -Name CredentialManager)) {
-		Require-NuGet
-		Write-Output "Install CredentialManager"
-		Install-Module -Name CredentialManager -AllowClobber -Confirm:$false -Force
-	}
-	Import-Module CredentialManager
-	$fmsCredential = Get-StoredCredential -Target "GetSSL FileMaker Server Admin Console"
-	if ($fmsCredential) {
-		$username = $fmsCredential.UserName
-		$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($fmsCredential.Password)
-		$password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-		$fmsCredential = $bstr = $null
-		if ($username -and $password) {
-			$userAndPassParamString = "-u $username -p $password"
-			Write-Output "found em!"
-		} else {
-			$username = $password = $null
-		}
-	} else {
-		Write-Output "no luck"
-	}
+	Write-Output $Start.ToString("F") # add nicely formatted date to logs
 	Write-Output ""
+	
+	# fix Issue #12: MSG:UnableToDownload error when installing dependencies (or listing installed dependencies)
+	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-	Write-Output "Confirming access to fmsadmin.exe:"
-	$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
-	if (-not ($FMAccessConfirmed)) {
-		# TODO: I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
-		Start-Sleep -Seconds 1
-		<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
-		   authentication, check again to be sure it's for real.
-		   https://community.filemaker.com/message/803496 #>
-		$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
-	}
-	if (-not ($FMAccessConfirmed)) {
-		if (Test-IsInteractiveShell) {
-			Write-Output "no access!"
-			Write-Output "A window will open where you can securely enter your fmsadmin login. Sometimes it takes a moment to open."
-			while (-not $FMAccessConfirmed) {
-				$fmsCredential = Get-Credential -Message "FileMaker Server Admin Console Sign In"
-				if ($fmsCredential) {
-					$username = $fmsCredential.UserName
-					$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($fmsCredential.Password)
-					$password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-					$fmsCredential = $bstr = $null
-					$FMAccessConfirmed = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
-					if (-not $FMAccessConfirmed) {
-						$username = $password = $null
-						Write-Output "That account didn't work, please try again."
-					}
-				} else {
-					Write-Output "no access!"
-					if (-not ($PSCmdlet.ShouldProcess(
-							"Permissions not setup to allow performing fmsadmin.exe without entering your username and password multiple times.",
-							"Permissions not setup to allow performing fmsadmin.exe without entering your username and password multiple times.",
-							"Continue?"
-						)))
-					{
-						exit
-					}
-					Break
-				}
+	switch ($PSCmdlet.ParameterSetName) {
+		'Setup' {
+			if (-not(Get-Module -Listavailable -Name Posh-ACME*)) {
+				Write-Output "Posh-ACME module not found, Installing Dependencies..."
+				Install-Dependencies
+				Write-Output "done"
 			}
+			Write-Output "Setup..."
+			Set-Server
+			# NOTE: $Setup may or may not be set since passing -Domains and -Emails parameter will activate Setup mode even without the -Setup flag
+			if (! $Setup) { [switch] $Setup = $True }
+		}
+		
+		'Renew' {
+			Write-Output "Renew..."
+			Set-Server
 			
-			if ($FMAccessConfirmed) {
-				Write-Output "securely store credentials"
-				$userAndPassParamString = "-u $username -p $password"
-				New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine -UserName $username -Password $password | Out-Null
+			# get Emails from Get-PAAccount
+			$account = Get-PAAccount
+			if (! $account) {
+				throw "No ACME account configured. Run Setup first."
 			}
+			$Emails = ($account.contact).Replace('mailto:','')
 			
-		} else {
-			throw ( "no access! Must be able to perform fmsadmin without entering user/pass when this script is not run interactively" )
-		}
-	} else {
-		Write-Output "confirmed"
-	}
-	Write-Output ""
-
-
-	if ($ScheduleTask) {
-		if ($Time.Date -eq $Start.Date) {
-			#Date contained in Time parameter was today, so add IntervalDays
-			$Time = $Time.AddDays($IntervalDays)
-		}
-		if ($PSCmdlet.ShouldProcess(
-			"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}", #NOTE: shown with -WhatIf parameter
-			"NOTE: If the fmsadmin.exe command cannot run without having to type the username/password when this script is run, the task will fail.",
-			"Schedule a task to renew the certificate every $IntervalDays days starting ${Time}?"
-		)) {
-			$StagingParameterAsText = if ($Staging) {"-Staging"}
-			$Action = New-ScheduledTaskAction `
-				-Execute powershell.exe `
-				-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$($MyInvocation.MyCommand.Path)' -Domains $($Domains -join ', ') -Email $Email -FMSPath '$FMSPath' $StagingParameterAsText -Confirm:0`""
-
-			$Trigger = New-ScheduledTaskTrigger `
-				-Daily `
-				-DaysInterval $IntervalDays `
-				-At $Time
-
-			$Settings = New-ScheduledTaskSettingsSet `
-				-AllowStartIfOnBatteries `
-				-DontStopIfGoingOnBatteries `
-				-ExecutionTimeLimit 00:10 `
-				-StartWhenAvailable
-
-			$Principal = New-ScheduledTaskPrincipal `
-				-UserId $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-				-LogonType S4U `
-				-RunLevel Highest
-
-			$Task = New-ScheduledTask -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
-				-Description "Get an SSL certificate from Let's Encrypt and install it on FileMaker Server."
-
-			$TaskName = "GetSSL $($Domains -join ', ')"
-
-			Register-ScheduledTask -TaskName $TaskName -InputObject $Task -Force
-		}
-		exit
-	}
-
-	if (!($Staging)) {
-		<# either the first message is show, or both the second AND third #>
-		$messages = @(
-			<# verboseDescription: Textual description of the action to be performed. This is what will be displayed to the user for ActionPreference.Continue. (-WhatIf parameter will show this) #>
-			"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.",
-
-			<# verboseWarning: Textual query of whether the action should be performed, usually in the form of a question. This is what will be displayed to the user for ActionPreference.Inquire. #>
-			"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
-
-			<# caption: Caption of the window which may be displayed if the user is prompted whether or not to perform the action. caption may be displayed by some hosts, but not all.#>
-			"Replace FileMaker Server Certificate with one from Let's Encrypt?"
-		)
-	} else {
-		$messages = @(
-			"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
-
-			"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
-
-			"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server?"
-		)
-	}
-
-	if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
-		$domainAliases = @();
-		foreach ($domain in $Domains) {
-			if ($domain -Match ",| ") {
-				throw "Domain cannot contain a comma or parameter; perhaps two domains were passed as a single string? Try removing quotes from the domains."
+			# get Domains from Get-PAOrder
+			$order = Get-PAOrder -Refresh
+			if (! $order) {
+				throw "No previously configured order found. Run Setup first."
 			}
-			$domainAliases += $domain + "-" + [guid]::NewGuid().ToString()
+			$Domains = @($order.MainDomain) + $order.SANs
 		}
+		
+		{$_ -in 'Setup','Renew'} {
+			Write-Output "  domains:      $($Domains -join ', ')"
+			Write-Output "  emails:       $($Emails -join ', ')"
+			Write-Output "  Staging:      $Staging"
+			Write-Output "  Force:        $Force"
+			Write-Output ""
 
+			if ($Staging -and $Force) {
+				<# either the first message is shown, or both the second AND third #>
+				$messages = @(
+					<# verboseDescription: Textual description of the action to be performed. This is what will be displayed to the user for ActionPreference.Continue. (-WhatIf parameter will show this) #>
+					"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, then restart FileMaker Server service.",
 
-		if (-not(Get-Module -Listavailable -Name ACMESharp) -or -not(Get-Module -Listavailable -Name ACMESharp.Providers.IIS)) {
-			Require-NuGet
-			Write-Output "Install ACMESharp"
-			Install-Module -Name ACMESharp, ACMESharp.Providers.IIS -AllowClobber -Confirm:$false -Force
-			Import-Module ACMESharp
-			Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS -ErrorAction:SilentlyContinue
-		} else {
-			Import-Module ACMESharp
-		}
-		Write-Output ""
+					<# verboseWarning: Textual query of whether the action should be performed, usually in the form of a question. This is what will be displayed to the user for ActionPreference.Inquire. #>
+					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
 
-		<# Initialize the vault to either Live or Staging#>
-		$Vault = Get-ACMEVault
-		if (!($Vault)) {
-			Write-Output "Initialize-ACMEVault"
-			if ($Staging) {
-				Initialize-ACMEVault -BaseService LetsEncrypt-STAGING
-			} else {
-				Initialize-ACMEVault
-			}
-		} else {
-			<# Make sure vault matches Staging parameter #>
-			if ($Vault.BaseUri.Contains('staging')) {
-				if (!($Staging)) {
-					Write-Output "Switch Vault from Staging to Production"
-					Initialize-ACMEVault -Force
-				}
+					<# caption: Caption of the window which may be displayed if the user is prompted whether or not to perform the action. caption may be displayed by some hosts, but not all.#>
+					"Replace with Staging Certificate?"
+				)
 			} elseif ($Staging) {
-				Write-Output "Switch Vault from Production to Staging"
-				Initialize-ACMEVault -BaseService LetsEncrypt-STAGING -Force
+				<# either the first message is shown, or both the second AND third #>
+				$messages = @(
+					"Replace FileMaker Server Certificate with one from Let's Encrypt Staging server, will NOT restart FileMaker Server service, because this is just for testing/setup.",
+					"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
+					"Replace with Staging Certificate?"
+				)
+			} else {
+				$messages = @(
+					"Replace FileMaker Server Certificate with one from Let's Encrypt, then restart FileMaker Server service.",
+					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
+					"Replace Certificate?"
+				)
 			}
+
+			if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
+				Write-Output ""
+				New-Cert
+				Install-Cert
+
+				if (Test-IsInteractiveShell) {
+					# just call the script again to schedule a task; it will ask user if they want to proceed
+					& $PSCommandPath -ScheduleTask -Staging:$Staging -Force:$Force
+				}
+			}
+
+			break
 		}
 
+		'InstallCertificate' {
+			Write-Output "InstallCertificate..."
+			Write-Output "  Staging:      $Staging"
+			Write-Output ""
 
-		Write-Output "Register contact info with LE"
-		New-ACMERegistration -Contacts mailto:$Email -AcceptTos
+			if ($Staging -and $Force) {
+				$messages = @(
+					"Replace FileMaker Server Certificate with stored Staging certificate, then restart FileMaker Server service.",
+					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
+					"Replace with Staging Certificate?"
+				)
+			} elseif ($Staging) {
+				$messages = @(
+					"Replace FileMaker Server Certificate with stored Staging certificate, will NOT restart FileMaker Server service, because this is just for testing/setup.",
+					"Will NOT restart FileMaker Server service, because this is just for testing/setup, right?",
+					"Replace with Staging Certificate?"
+				)
+			} else {
+				$messages = @(
+					"Replace FileMaker Server Certificate stored certificate, then restart FileMaker Server service.",
+					"If you proceed, and this script is successful, FileMaker Server service will be restarted and ALL USERS DISCONNECTED.",
+					"Replace Certificate?"
+				)
+			}
 
+			if ($PSCmdlet.ShouldProcess($messages[0], $messages[1], $messages[2])) {
+				Write-Output ""
+				Set-Server
+				Install-Cert
+			}
 
-		<# ACMESharp creates a web.config that doesn't work so let's SkipLocalWebConfig and make our own
-			(it seems to think text/json is required) #>
-		$webConfigPath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge\web.config'
-
-		<# Create directory the file goes in #>
-		if (-not (Test-Path (Split-Path -Path $webConfigPath -Parent))) {
-			Write-Output "Create acme-challenge directory"
-			New-Item -Path (Split-Path -Path $webConfigPath -Parent) -ItemType Directory
+			break
 		}
 
-		Write-Output "Create web.config file"
-		'<configuration>
-			<system.webServer>
-				<staticContent>
-					<mimeMap fileExtension="." mimeType="text/plain" />
-				</staticContent>
-			</system.webServer>
-		</configuration>' | Out-File -FilePath ($webConfigPath)
-		Write-Output "done"
-		Write-Output ""
+		'ScheduleTask' {
+			Write-Output "ScheduleTask..."
+			Write-Output "  Staging:      $Staging"
+			Write-Output "  Force:        $Force"
+			Write-Output ""
+			Schedule-Task
+			
+			if (-not(Get-StoredCredential -Target "GetSSL Send Email")) {
+				if ($PSCmdlet.ShouldProcess(
+					"Configure this script to email logs?",
+					"Configure this script to email logs?",
+					"Configure email?"
+				)) {
+					& $PSCommandPath -ConfigureEmail
+				} else {
+					Write-Output "Can do this later with this command:"
+					Write-Output "  .'$PSCommandPath' -ConfigureEmail"
+				}
+			}
 
+			break
+		}
 
-		<# Loop through the array of domains and validate each one with LE #>
-		for ( $i=0; $i -lt $Domains.length; $i++ ) {
-			<# Create a UUID alias to use for our domain request #>
-			$domain = $Domains[$i]
-			$domainAlias = $domainAliases[$i]
-			Write-Output "Performing challenge for $domain with alias $domainAlias";
+		'ConfigureEmail' {
+			Write-Output "ConfigureEmail..."
+			Write-Output ""
 
-			<#Create an entry for us to use with these requests using the alias we just generated #>
-			New-ACMEIdentifier -Dns $domain -Alias $domainAlias;
+			$from = Read-Host -Prompt ("Send from address")
 
-			<# Use ACMESharp to automatically create the correct files to use for validation with LE #>
-			$response = Complete-ACMEChallenge $domainAlias -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'FMWebSite'; SkipLocalWebConfig = $true } -Force
+			Write-Output "Common Server URLs:"
+			Write-Output "  Gmail               smtp.gmail.com"
+			Write-Output "  Outlook.com         smtp.live.com"
+			Write-Output "  Office365           smtp.office365.com"
+			Write-Output "  Yahoo               smtp.mail.yahoo.com"
+			Write-Output "  Hotmail             smtp.live.com"
+			$server = Read-Host -Prompt ("SMTP Server URL")
 
-			<# Sample Response
-			== Manual Challenge Handler - HTTP ==
-			  * Handle Time: [1/12/2016 1:16:34 PM]
-			  * Challenge Token: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
-			To complete this Challenge please create a new file
-			under the server that is responding to the hostname
-			and path given with the following characteristics:
-			  * HTTP URL: [http://myserver.example.com/.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
-			  * File Path: [.well-known/acme-challenge/2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0]
-			  * File Content: [2yRd04TwqiZTh6TWLZ1azL15QIOGaiRmx8MjAoA5QH0.H3URk7qFUvhyYzqJySfc9eM25RTDN7bN4pwil37Rgms]
-			  * MIME Type: [text/plain]------------------------------------
-			#>
-
-			<# Let them know it's ready #>
-			Write-Output "Submit-ACMEChallenge"
-			Submit-ACMEChallenge $domainAlias -ChallengeType http-01 -Force;
-
-			Write-Output "Update-ACMEIdentifier: Wait for LE to validate settings"
-			$timeout = New-TimeSpan -Minutes 1
-			$sw = [diagnostics.stopwatch]::StartNew()
+			Write-Output "Common Ports:"
+			Write-Output "  Gmail               587"
+			Write-Output "  Outlook.com         587"
+			Write-Output "  Office365           587"
+			Write-Output "  Yahoo               465"
+			Write-Output "  Hotmail             465"
 			do {
-				<# I tested with 1ms sleep and it was valid on the first iteration,
-				   but to be curtious to LE's server's, I set it to sleep for 1 second #>
-				Start-Sleep -Seconds 1
-				$response = (Update-ACMEIdentifier $domainAlias -ChallengeType http-01)
-				$status = ($response.Challenges | Where-Object {$_.Type -eq "http-01"}).Status
-				if ($sw.elapsed -gt $timeout) {
-					$response
-					$response.Challenges
-					$status
-					throw ("timed out")
+				$default = 587
+				$port = Read-Host -Prompt ("SMTP Port [$default]")
+				if ($port -eq "") {$port = $default}
+				try { $port -eq [int]$port }
+				catch {
+					Write-Output "port must be an integer"
+					$port = $null
 				}
-				Write-Host -NoNewline "."
 			}
-			until ($status -and ($status -ne "pending"))
-			if ($status -ne "valid") {
-				Write-Output $response
-				Write-Output $response.Challenges
-				throw ("unexpected status value: $status")
+			until ($port)
+
+			Write-Output "Common useSSL setting:"
+			Write-Output "  Gmail               y"
+			Write-Output "  Outlook.com         y"
+			Write-Output "  Office365           y"
+			Write-Output "  Yahoo               y (I'm assuming)"
+			Write-Output "  Hotmail             y"
+			do {
+				$useSSL = Read-Host -Prompt ("SMTP useSSL [y or n]")
+				if ($useSSL.ToLower() -eq 'y')     { $useSSL = $True }
+				elseif ($useSSL.ToLower() -eq 'n') { $useSSL = $False }
+				else                               { $useSSL = $null }
 			}
+			until ($useSSL -is [Boolean])
+
+			$smtpInfo = @{from=$from; server=$server; port=$port; useSSL=$useSSL}
+			$smtpInfo | Format-Table
+			$smtpInfoJSON = ($smtpInfo | ConvertTo-Json -Compress)
+
+			Get-Credential -Message "GetSSL Send Email" | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -Comment $smtpInfoJSON | Out-Null
+			
+			Send-Email -Subject "GetSSL setup test" `
+				-Body "If you get this email, then GetSSL has been configured to send logs via email when it's run via scheduled task."
+
+			break
+		}
+
+		Default {
+			# InstallDependencies by default
+			Write-Output "Installing Dependencies..."
+			Install-Dependencies
 			Write-Output "done"
-			Write-Output ""
-		}
 
-
-
-		$certAlias = 'cert-'+[guid]::NewGuid().ToString()
-
-		<# Ready to get the certificate #>
-		Write-Output "New-ACMECertificate"
-		New-ACMECertificate $domainAliases[0] -Generate -AlternativeIdentifierRefs $domainAliases -Alias $certAlias
-
-		Write-Output "Submit-ACMECertificate"
-		Submit-ACMECertificate $certAlias
-
-		Write-Output "Update-ACMECertificate: Wait for LE to create the certificate"
-		$timeout = New-TimeSpan -Minutes 1
-		$sw = [diagnostics.stopwatch]::StartNew()
-		do {
-			Start-Sleep -Seconds 1
-			$response = (Update-ACMECertificate $certAlias)
-			$issuerSerialNumber = $response.IssuerSerialNumber
-			if ($sw.elapsed -gt $timeout) {
-				$response
-				$issuerSerialNumber
-				throw ("timed out")
+			if ($PSCmdlet.ShouldProcess(
+				"Setup and install a certificate now?",
+				"Setup and install a certificate now?",
+				"Setup?"
+			)) {
+				& $PSCommandPath -Setup -Staging:$Staging -Force:$Force
+			} else {
+				Write-Output "When ready, you can setup and install a certificate:"
+				Write-Output "  .'$PSCommandPath' -Setup"
 			}
-			Write-Host -NoNewline "."
+
 		}
-		until ($issuerSerialNumber)
-		Write-Output "done"
-		Write-Output ""
-
-
-		Write-Output "Export the private key"
-		$keyPath = Join-Path $FMSPath 'CStore\serverKey.pem'
-		if (Test-Path $keyPath) {
-			Backup-File $keyPath
-			Remove-Item $keyPath
-		}
-		Get-ACMECertificate $certAlias -ExportKeyPEM $keyPath
-
-		Write-Output "Export the certificate"
-		$certPath = Join-Path $FMSPath 'CStore\crt.pem'
-		if (Test-Path $certPath) {
-			Backup-File $certPath
-			Remove-Item $certPath
-		}
-		Get-ACMECertificate $certAlias -ExportCertificatePEM $certPath
-
-		Write-Output "Export the Intermediary"
-		$intermPath = Join-Path $FMSPath 'CStore\interm.pem'
-		if (Test-Path $intermPath) {
-			Backup-File $intermPath
-			Remove-Item $intermPath
-		}
-		Get-ACMECertificate $certAlias -ExportIssuerPEM $intermPath
-
-		$serverCustomPath = Join-Path $FMSPath 'CStore\serverCustom.pem'
-		if (Test-Path $serverCustomPath) {
-			Backup-File $serverCustomPath
-			Write-Output ""
-		}
-
-		Write-Output "Import certificate via fmsadmin:"
-		<# NOTE: use this method of calling fmsadmin whenever it's possible for it to ask user for
-		   input. Otherwise, just call it directly.
-		   https://community.filemaker.com/thread/191306
-		#>
-		cmd /c "`"$fmsadmin`" certificate import `"$certPath`" -y $userAndPassParamString"
-		if (! $?) { throw ("fmsadmin certificate import error code " + $LASTEXITCODE) }
-		Write-Output "done"
-		Write-Output ""
-
-		Write-Output "Append the intermediary certificate:"
-		<# to support older FMS before 15 #>
-		if (Test-Path $intermPath) {
-			Add-Content $serverCustomPath (Get-Content $intermPath)
-			Write-Output "done"
-		} else {
-			Write-Output "skipped because intermediary certificate not found at path: $intermPath"
-		}
-		Write-Output ""
-
-		Write-Output "Stop FileMaker Server:"
-		if ($Staging) {
-			Write-Output "skipped because -Staging parameter was provided"
-		} else {
-			$WPEWasRunning = Get-Process fmscwpc -ErrorAction:Ignore
-			if ($FMAccessConfirmed) {
-				Write-Output "check if files are open first"
-				<# Only run this code if user will not be prompted for user/pass since this method
-				   of calling fmsadmin does not allow them to enter their user/pass #>
-				$FilesWereOpen = cmd /c "`"$fmsadmin`" list files $userAndPassParamString"
-				if ($FilesWereOpen) {
-					Write-Output "files are open"
-				} else {
-					Write-Output "no files open"
-				}
-				Write-Output "now stop server"
-			}
-			cmd /c "`"$fmsadmin`" stop server -y $userAndPassParamString"
-			if (! $?) { throw ("error code " + $LASTEXITCODE) }
-		}
-		Write-Output "done"
-		Write-Output ""
-
-		Write-Output "Restart the FMS service:"
-		if ($Staging) {
-			Write-Output "skipped because -Staging parameter was provided"
-		} else {
-			Restart-Service "FileMaker Server"
-		}
-		Write-Output "done"
-		Write-Output ""
-
-		<# Just in case server isn't configured to start automatically #>
-		Write-Output "Start FileMaker Server:"
-		if ($Staging) {
-			Write-Output "skipped because -Staging parameter was provided"
-		} else {
-			& $fmsadmin start server
-			if ($LASTEXITCODE -eq 10006) {
-				Write-Output "(If server is set to start automatically, error 10006 is expected)"
-			}
-			if ($WPEWasRunning -and -not(Get-Process fmscwpc -ErrorAction:Ignore)) {
-				<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes processes running the same bit depth as PowerShell #>
-				Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
-				& $fmsadmin start wpe
-				Write-Output "done starting WPE"
-			}
-			if ($FilesWereOpen) {
-				Write-Output "files were open, confirm access to fmsadmin"
-				<# Confirm FMAccess again, since it can ask for a password again after starting
-				   server. Do it twice; first time will likely fail, second time should succeed.
-				   https://community.filemaker.com/thread/191306 #>
-				$FMAccessConfirmedAfterRestart = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
-				if (-not ($FMAccessConfirmedAfterRestart)) {
-					# TODO: I don't know, but I suspect fmsadmin occasionally needs some time here, or throttles logins
-					Start-Sleep -Seconds 1
-					<# Sometimes fmsadmin asks for a password even if it's configured properly to use external
-					   authentication, check again to be sure it's for real.
-					   https://community.filemaker.com/message/803496 #>
-					$FMAccessConfirmedAfterRestart = Confirm-FMSAccess $username $password -fmsadmin $fmsadmin
-				}
-				if ($FMAccessConfirmedAfterRestart) {
-					Write-Output "check if files are open now"
-					<# NOTE: If fmsadmin asks for a user/pass here, the user will not see the
-					   request, will not be able to enter them, and the script will hang. #>
-					if(-not(& cmd /c "`"$fmsadmin`" list files $userAndPassParamString")) {
-						Write-Output "open files because they were open before FMS was stopped, but aren't now:"
-						cmd /c "`"$fmsadmin`" open $userAndPassParamString"
-					} else {
-						Write-Output "they are"
-					}
-				} else {
-					Write-Output "could not connect to fmsadmin"
-				}
-			} elseif ($FilesWereOpen -eq $null) {
-				<# In this case, $FilesWereOpen wasn't set because that logic can't properly run
-				   when the user has to enter their user/pass. So just assume files should be
-				   opened and the user is at the console able to enter user/pass #>
-				cmd /c "`"$fmsadmin`" open $userAndPassParamString"
-			}
-		}
-		Write-Output "done"
-		Write-Output ""
 	}
 }
 
 Catch {
 	<# Make sure the error is logged in the transcript #>
 	$_ | Out-String
+	Write-Output "Stack Trace:" $_.ScriptStackTrace
 	<# Throw it again so it sets an exit code #>
 	throw
 }
 
 Finally {
-	<# Overwrite sensitive variables to get them out of memory #>
-	$fmsCredential = $bstr = $username = $password = $userAndPassParamString = $null
-
-	if ( $Logging ) {
-		Write-Output ""
-		Write-Output "Delete old Log files, if necessary."
-		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
-		Write-Output ""
-		Try {
-			Stop-Transcript | Out-Null
+	if ($mustStartServer) {
+		Write-Output "mustStartServer was still true in Finally block, so try to start it..."
+		if ((Get-Service "FileMaker Server").Status  -ne "Running") {
+			Write-Output "FileMaker Server service was not running, it will be started now"
+			Start-Service "FileMaker Server"
+			Start-Sleep 2 # give the service a few seconds to start before testing if fmserver is running
 		}
-		Catch [System.InvalidOperationException]{}
-
-		if (-not (Test-IsInteractiveShell)) {
-			if (Get-Module -Listavailable -Name CredentialManager) {
-				Import-Module CredentialManager
-				$credentials = Get-StoredCredential -Target "GetSSL Send Email"
-				if ($credentials) {
-					<# If CredentialManager is installed and user has stored credentials with the
-					   required name, assume user has also configured the following section: #>
-					Send-MailMessage -Subject "GetSSL $Domains" -Body (Get-Content $LogFilePath -Raw) -Encoding UTF8 -Credential $credentials -To $Email `
-						-From user@email.com `
-						-SmtpServer smtp.gmail.com `
-						-Port 587 `
-						-UseSsl
+		$retries = 4
+		$timeout = 90
+		while ($true) {
+			$retries--
+			try {
+				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+				Invoke-FMSAdmin start, server -Timeout $timeout
+				break
+			}
+			catch [System.TimeoutException] {
+				if ($retries -gt 0) {
+					Write-Output "  timed out, $retries attempt(s) left before aborting"
+					$timeout *= 2
+				} else {
+					Write-Output "Sorry, still couldn't start server"
+					break
 				}
 			}
+			catch [System.ApplicationException] {
+				# NOTE: Error: 10007 (Requested object does not exist) occurs when service is stopped
+				if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
+					Write-Output "(If server is set to start automatically, error 10006 is expected)"
+				} else {
+					Write-Output "Sorry, still couldn't start server"
+				}
+				break
+			}
+		}
+		if ($WPEWasRunning) {
+			try {Invoke-FMSAdmin start, wpe} catch{}
+		}
+		if ($FilesWereOpen) {
+			try {Invoke-FMSAdmin open -Timeout 60}
+			catch {
+				# blindly try again, giving it more time
+				try {Invoke-FMSAdmin open -Timeout 180} catch{}
+			}
+		}
+	}
+
+	<# Overwrite sensitive variables to get them out of memory #>
+	$fmsCredential = $username = $password = $userAndPassParamString = $null
+
+	if ($Logging) {
+		Try { Write-Output ""; (Get-Help -Full $PSCommandPath).alertSet.alert.Text }
+		Catch { Write-Output "failed to extract script version from header comment"; $_ }
+
+		Try {
+			<#
+			Write-Output "`r`nmodule versions installed:"
+			(Get-Module -Listavailable -Name Posh-ACME.net46, Posh-ACME, CredentialManager -ErrorAction Ignore |
+				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
+			#>
+			Write-Output "`r`nmodule versions used:"
+			(Get-InstalledModule -Name Posh-ACME.net46, Posh-ACME, CredentialManager -ErrorAction Ignore |
+				Select-Object Name, Version | Format-Table -HideTableHeaders | Out-String ).Trim()
+		}
+		Catch { Write-Output "failed to get module versions"; $_ }
+
+		Write-Output ""
+		Write-Output (Get-Date).ToString("F") # add nicely formatted date to log
+		Write-Output "Delete old Log files, if necessary."
+		Get-ChildItem $LogDirectory -Filter *.log | Sort CreationTime -Descending | Select-Object -Skip $LogsToKeep | Remove-Item -Force
+		Try {Stop-Transcript | Out-Null} Catch [System.InvalidOperationException] {}
+
+		if (-not (Test-IsInteractiveShell)) {
+			Send-Email -Subject GetSSL $Domains -Body (Get-Content $LogFilePath -Raw)
 		}
 	}
 }

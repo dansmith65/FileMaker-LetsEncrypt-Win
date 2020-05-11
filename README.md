@@ -5,15 +5,17 @@ This is a fork of the work started by: [David Nahodyl, Blue Feather](http://blue
 Thanks for figuring out the hard part David!
 
 
+
 ## Notes
 
 * Only supports newer OS (only tested on Windows Server 2016).
-* Only tested on FileMaker Server 17.
-* Installs ACMESharp for you.
-* Will not display any errors, unless it fails.
+* Only tested on FileMaker Server 17 and 18.
+* Installs all dependencies for you.
+* If you use this script in production, you should watch this repo in GitHub so you get a notification when it's updated.
 
 
-## Installation
+
+## Installation and Quick Setup
 
 1. Open PowerShell console as an Administrator:
 
@@ -22,7 +24,8 @@ Thanks for figuring out the hard part David!
    3. Right-click on **Windows PowerShell**
    4. Click **Run as administrator**
 
-2. Download the `GetSSL.ps1` file to your server:
+2. Download the `GetSSL.ps1` file to your server:  
+   _(replace **master** with **dev** or a tag name to download a different version of this script)_
 
    ```powershell
    Invoke-WebRequest `
@@ -30,34 +33,87 @@ Thanks for figuring out the hard part David!
      -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"
    ```
 
-3. Get your first Certificate:  
-   You **should** read the Docs first (see below). If you like to live dangerously and you have FileMaker Server installed in the default directory you can run this command after replacing `fms.example.com` and `user@email.com` with your own.  
-   Consider adding the `-Staging` parameter when first configuring this script, so you can verify there are no permissions or config issues before using Let's Encrypt production server, or restarting FileMaker server.
+3. Access the wizard-style setup by calling without parameters:  
+   _(if you're just testing, add ` -Staging` to the end)_
 
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force;
-   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1'
    ```
 
-4. (Optional) Setup scheduled task to renew the certificate:  
-   Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to run the above command to renew the certificate before it expires every 90 days.  
-   Consider configuring [Log File to be Emailed](https://github.com/dansmith65/FileMaker-LetsEncrypt-Win/tree/dev#email-log-file) to you before you running this step.
+   After this task completes, you'll be asked if you want to get a certificate, at which point you'll be prompted for domain(s) and email. Then, you'll be asked if you want to schedule a task, then configure email. If you do all these steps, the setup is complete for this server.
+
+
+
+## Advanced Options
+
+Examples in this section will use a shortened syntax and assumes you will set execution policy manually, or prefix the command with the snippets above. It also leaves the path to `GetSSL.ps1` off for the same reason.
+
+1. Get and Install a Certificate:  
+   Also use this command to modify the stored domain or email, which is used for renewals. Once this is done, you likely never have to specify domain/email again unless you want to change it.
+
+   ```powershell
+   .\GetSSL.ps1 -Setup -Domains fms.example.com, fms.example2.com -Emails user@email.com, user2@email.com
+   ```
+
+2. Renew Certificate:  
+   Renew the most recently used certificate. This is the command called by the scheduled task, but you can run it manually if needed.
+
+   ```powershell
+   .\GetSSL.ps1 -Renew
+   ```
+
+3. Install Certificate:  
+   Installs the most recently retrieved certificate. Useful if a certificate was successfully retrieved, but something failed before it was installed.
+
+   ```powershell
+   .\GetSSL.ps1 -InstallCertificate
+   ```
+
+4. Setup scheduled task to renew the certificate:  
+   Will schedule a task to re-occur every 63 days. You can modify this task after it's created by opening Task Scheduler. If you don't do this step, you will have to manually renew the certificate before it expires every 90 days.  
+
+   ```powershell
+   .\GetSSL.ps1 -ScheduleTask
+   ```
+
+   Note that 63 days was choosens as the default renwal interval because it will make the renewal fall on the same day of the week and is close to the recommended renewal point which is 2/3 of the certificates lifespan. You can specify your own renewal interval by appending: `-IntervalDays 70`, or just manually modify the task via **Task Scheduler**.
+
+   You can also specify your preferred renewal time by appending: `-Time 2:00am`. The default time is **4:00am**.
+
+   A full example with custom interval and time:
+
+   ```powershell
+   .\GetSSL.ps1 -ScheduleTask -IntervalDays 70 -Time 2:00am
+   ```
+
+5. Email Log File:  
+
+   Store credentials and SMTP info so this script can send logs when it runs from a scheduled task.
 
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force;
-   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' fms.example.com user@email.com -ScheduleTask
+   & 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' -ConfigureEmail
    ```
 
-Watch me install and test the script, explaining various options along the way:
-[![Full Walkthrough Video on YouTube](https://img.youtube.com/vi/a8DdnGXFDu4/0.jpg)](https://www.youtube.com/watch?v=a8DdnGXFDu4)
+6. Update Dependencies:
+
+   ```powershell
+   .\GetSSL.ps1 -InstallDependencies -Force
+   ```
+
+7. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
+   You could potentially do this to modify the domains or your contact email. GetSSL will use whatever domains are returned by `Get-PAOrder` and whatever account is returned by `Get-PAAccount`.
 
 
 
 ## Documentation
 
+NOTE: This documentation is not yet fully updated for version 2.
+
 If you view the [GetSSL.ps1](GetSSL.ps1) file as text; the documentation is in comments at the top of the file.
 
-To view it the "PowerShell Way", you can use Get-Help like:
+To view it the "PowerShell Way", you can use `Get-Help` like:
 
 ```powershell
 Get-Help .\GetSSL.ps1 -full
@@ -80,13 +136,19 @@ If you want to, external authentication can easily be enabled on a default insta
 4. Admin Console Sign In > External Accounts: __Enable__
 5. Confirm it's working by typing this on the command line: `fmsadmin list files`. If you are not asked for a user/pass, then it has be properly enabled.
 
+If external authentication _is_ enabled but you _don't_ want to use it, you can store credentials with this command:
+
+```powershell
+Get-Credential | New-StoredCredential -Target "GetSSL FileMaker Server Admin Console" -Persist LocalMachine
+```
+
 
 
 ## Staging
 
 I won't duplicate what is already said about the `-Staging` parameter in the official help docs but I do want to add to it. Let's Encrypt service imposes [Rate Limits](https://letsencrypt.org/docs/rate-limits/), which are less restrictive on their staging environment. While developing this script (and before I added this parameter) I repeatedly tested with the same domain and quickly hit the limit of 5 identical certificate requests per week. While this won't pertain to most people, I do want to point out that if you are doing testing, you _should_ use the `-Staging` parameter.
 
-Using this parameter is a great way of doing the initial setup/testing as well. It allows you to go through all the steps without worrying about Rate Limits or your server being restarted. Common issues like permissions to call fmsadmin.exe without having to type a user/pass can be resolved before doing a final install. Since the existing certificate is backed up before being replaced, you could always restore to existing configuration, if needed.
+Using this parameter is a great way of doing the initial setup/testing as well. It allows you to go through all the steps without worrying about rate limits or your server being restarted. Common issues like permissions to call fmsadmin.exe without having to type a user/pass can be resolved before doing a final install. Since the existing certificate is backed up before being replaced, you could always restore to existing configuration, if needed.
 
 
 
@@ -105,33 +167,10 @@ _Make sure to use the actual path to the backup you want to restore; this code i
 
 
 
-## Multiple Domains
-
-You can request a certificate for multiple domains at once by separating them with commas:
-
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force;
-& 'C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1' example.com, www.example.com, fms.example.com user@email.com
-```
-
-
-
 ## Custom Shutdown/Startup
 
-This script must restart the FileMaker Server process to complete the installtion of the certificate. It does it's best to do a safe shutdown and to start the server, CWP (if it was running), and open files (if there were any open before). However, if you want to customize this process, you could edit the script towards the end where it does these steps. A likely example is if you want to give users longer than 30 seconds to close files before the server restarts. To do that, you would add ` -t #` with the number of seconds timeout you want after: `fmsadmin stop server -y`.
+This script must restart the FileMaker Server process to complete the installtion of the certificate. It does it's best to do a safe shutdown and to start the server, CWP (if it was running), and open files (if there were any open before). However, if you want to customize this process, you could edit the script's `Install-Cert` function.
 
 Beware that if you have to enter an encryption at rest password when you open files, you will need to manage this process yourself, in this section of the script. NOTE: this only applies if you've configured your server not to store the password.
 
 Alternatively, if you have your own shutdown/startup scripts already, you could call them directly and remove the default steps provided in this script.
-
-
-
-## Email Log File
-
-At the very end of the script, there is a little code to email you the log file if the script was run from a scheduled task. To enable this code, you need to edit the SMTP connection info in the script and store your username and password so the script can access them. You can securely store your credentials by running these from PowerShell (which is running as Administrator):
-
-```powershell
-New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -UserName "youruser" -Password "yourpass"
-```
-
-That's it! Now you can sleep well, knowing you will get an email when the script runs. You might want to add a reminder to your calendar to expect an email when the task runs, so you can be sure to log into the server and view the log, if you don't happen to get an email.
