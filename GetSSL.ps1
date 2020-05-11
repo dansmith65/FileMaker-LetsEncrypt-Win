@@ -4,8 +4,8 @@
 
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2020-05-03
-	Version:     2.0.0-beta3+
+	Revised:     2020-05-11
+	Version:     2.0.0
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -17,6 +17,11 @@
 	https://github.com/rmbolger/Posh-ACME/wiki/%28Advanced%29-Manual-HTTP-Challenge-Validation
 
 .EXAMPLE
+	.\GetSSL.ps1 -Setup test.com user@test.com -WhatIf
+
+	Display the inputs, then exit; use to verify you passed parameters in the correct format
+
+.EXAMPLE
 	.\GetSSL.ps1 -Renew -Confirm:0
 
 	Don't ask for confirmation; use this parameter when called from a scheduled task.
@@ -26,11 +31,6 @@
 	     that belongs to the group.
 	  2. Run this script with the Setup parameter the first time you use it and enter your admin
 	     console credentials when it asks you.
-
-.EXAMPLE
-	.\GetSSL.ps1 -Setup test.com user@test.com -WhatIf
-
-	Display the inputs, then exit; use to verify you passed parameters in the correct format
 #>
 
 
