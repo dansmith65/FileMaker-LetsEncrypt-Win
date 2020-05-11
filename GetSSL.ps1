@@ -4,8 +4,8 @@
 
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2020-03-06
-	Version:     2.0.0-beta3
+	Revised:     2020-05-03
+	Version:     2.0.0-beta3+
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -841,6 +841,9 @@ Try {
 
 	Write-Output $Start.ToString("F") # add nicely formatted date to logs
 	Write-Output ""
+	
+	# fix Issue #12: MSG:UnableToDownload error when installing dependencies (or listing installed dependencies)
+	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 	switch ($PSCmdlet.ParameterSetName) {
 		'Setup' {
