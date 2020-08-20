@@ -105,6 +105,13 @@ Examples in this section will use a shortened syntax and assumes you will set ex
 7. Call [Posh-ACME](https://github.com/rmbolger/Posh-ACME/wiki/(Advanced)-Manual-HTTP-Challenge-Validation) functions directly.  
    You could potentially do this to modify the domains or your contact email. GetSSL will use whatever domains are returned by `Get-PAOrder` and whatever account is returned by `Get-PAAccount`.
 
+8. Specify an alternative web root for HTTP-01 challenge:
+
+   If your FileMaker server is not exposed to the internet you will be unable to complete the HTTP-01 challenge. However, if you have another IIS server on your network that is exposed, you can use its web root instead.
+
+   ```powershell
+   .\GetSSL.ps1 -WebRoot '\\web-server\C$\inetpub\wwwroot'
+   ```
 
 
 ## Documentation
