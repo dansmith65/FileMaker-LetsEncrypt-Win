@@ -37,6 +37,17 @@
 [cmdletbinding(SupportsShouldProcess=$true,ConfirmImpact='High',DefaultParameterSetName='InstallDependencies')]
 Param(
 	<#
+		Specify an alternate web root directory for HTTP-01 challenge. For use if FileMaker's web server
+		is not exposed to the internet, but another web server is. As long as that other server's
+		filesystem is accessible to the FileMaker server, anyway.
+
+		For example, -WebRoot '\\web-server\C$\inetpub\wwwroot'
+	#>
+	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='Renew')]
+	[string] $WebRoot,
+
+	<#
 		Install all dependent libraries; restart may be required if .NET is updated. Run this once
 		before using this script for the first time. This action is performed if no parameters sent to
 		the script.
@@ -622,7 +633,11 @@ function New-Cert {
 
 
 	Write-Output "Authorizations and Challenges ___________________________________________________"
-	$acmeChallengePath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge'
+	if ($WebRoot) {
+		$acmeChallengePath = Join-Path $WebRoot '.well-known\acme-challenge'
+	} else {
+		$acmeChallengePath = Join-Path $FMSPath 'HTTPServer\conf\.well-known\acme-challenge'
+	}
 	if (! (Test-Path $acmeChallengePath)) {
 		Write-Output "Create acme-challenge directory"
 		(New-Item -Path $acmeChallengePath -ItemType Directory).ToString().Trim()
@@ -740,9 +755,10 @@ function Schedule-Task {
 	)) {
 		$StagingParameterAsText = if ($Staging) {"-Staging"}
 		$ForceParameterAsText = if ($Force) {"-Force"}
+		$WebRootParameterAsText = if ($WebRoot) {"-WebRoot '" + $WebRoot + "'"}
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText $ForceParameterAsText -Confirm:0"""
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText $ForceParameterAsText $WebRootParameterAsText -Confirm:0"""
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
