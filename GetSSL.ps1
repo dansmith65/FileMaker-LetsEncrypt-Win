@@ -44,6 +44,7 @@ Param(
 		For example, -WebRoot '\\web-server\C$\inetpub\wwwroot'
 	#>
 	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='ScheduleTask')]
 	[Parameter(ParameterSetName='Renew')]
 	[string] $WebRoot,
 
