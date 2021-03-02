@@ -4,8 +4,9 @@
 
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
-	Revised:     2020-05-11
-	Version:     2.0.0
+	Contributor: Nick Roemer stomp@stompsucks.com
+	Revised:     2021-MAR-02
+	Version:     2.1.0
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
