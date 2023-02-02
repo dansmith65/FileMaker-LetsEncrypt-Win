@@ -5,8 +5,8 @@
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
 	Contributor: Nick Roemer stomp@stompsucks.com
-	Revised:     2021-MAR-02
-	Version:     2.1.0
+	Revised:     2023-FEB-02
+	Version:     2.1.1
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -1050,7 +1050,7 @@ Try {
 			$smtpInfo | Format-Table
 			$smtpInfoJSON = ($smtpInfo | ConvertTo-Json -Compress)
 
-			Get-Credential -Message "GetSSL Send Email" | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -Comment $smtpInfoJSON | Out-Null
+			Get-Credential -Message "SMTP Credentials" | New-StoredCredential -Target "GetSSL Send Email" -Persist LocalMachine -Comment $smtpInfoJSON | Out-Null
 			
 			Send-Email -Subject "GetSSL setup test" `
 				-Body "If you get this email, then GetSSL has been configured to send logs via email when it's run via scheduled task."
