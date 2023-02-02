@@ -32,6 +32,12 @@ Thanks for figuring out the hard part David!
      -Uri https://raw.githubusercontent.com/dansmith65/FileMaker-LetsEncrypt-Win/master/GetSSL.ps1 `
      -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"
    ```
+   
+   If you get an error like: `Invoke-WebRequest : The request was aborted: Could not create SSL/TLS secure channel.`, you can resolve it by running this command in PowerShell:
+   
+   ```powershell
+   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+   ```
 
 3. Access the wizard-style setup by calling without parameters:  
    _(if you're just testing, add ` -Staging` to the end)_
