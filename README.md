@@ -29,7 +29,7 @@ Thanks for figuring out the hard part David!
 
    ```powershell
    Invoke-WebRequest `
-     -Uri https://raw.githubusercontent.com/dansmith65/FileMaker-LetsEncrypt-Win/master/GetSSL.ps1 `
+     -Uri https://raw.githubusercontent.com/nickorr/FileMaker-LetsEncrypt-Win/master/GetSSL.ps1 `
      -OutFile "C:\Program Files\FileMaker\FileMaker Server\Data\Scripts\GetSSL.ps1"
    ```
    
