@@ -456,7 +456,29 @@ function Install-Cert {
 		if ($WPEWasRunning -and -not(Get-Process fmscwpc -ErrorAction:Ignore)) {
 			<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes running the same bit depth as PowerShell #>
 			Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
-			Invoke-FMSAdmin start, wpe
+			$retries = 3
+			$timeout = 60
+			while ($true) {
+				$retries--
+				try {
+					Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
+					Invoke-FMSAdmin start, wpe -Timeout $timeout
+					break
+				}
+				catch [System.TimeoutException] {
+					if ($retries -gt 0) {
+						Write-Output "  timed out, $retries attempt(s) left before aborting"
+						$timeout *= 2
+					} else { throw }
+				}
+				catch [System.ApplicationException] {
+					# NOTE: Error: 10007 (Requested object does not exist) occurs when service is stopped
+					if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
+						Write-Output "(If server is set to start automatically, error 10006 is expected)"
+						break
+					} else { throw }
+				}
+			}
 			Write-Output "done starting WPE"
 		}
 		if ($FilesWereOpen) {
