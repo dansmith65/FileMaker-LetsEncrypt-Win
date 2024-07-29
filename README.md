@@ -8,8 +8,8 @@ Thanks for figuring out the hard part David!
 
 ## Notes
 
-* Only supports newer OS (only tested on Windows Server 2016).
-* Only tested on FileMaker Server 17, 18, 19 and 20.
+* Only supports Windows Server 2016+.
+* Tested on FileMaker Server 17, 18, 19, 20, and 21.
 * Installs all dependencies for you.
 * If you use this script in production, you should watch this repo in GitHub so you get a notification when it's updated.
 

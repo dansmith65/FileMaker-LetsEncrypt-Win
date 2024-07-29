@@ -5,8 +5,8 @@
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
 	Contributor: Nick Roemer stomp@stompsucks.com
-	Revised:     2023-FEB-02
-	Version:     2.1.1
+	Revised:     2024-JUL-29
+	Version:     2.1.2
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -435,6 +435,8 @@ function Install-Cert {
 			try {
 				Write-Output ("with timeout of $timeout seconds, starting at {0}..." -f (Get-Date).ToLongTimeString())
 				Invoke-FMSAdmin start, server -Timeout $timeout
+				<# give FMS a little time to start other processes, like WPE #>
+				Start-Sleep -Seconds 3
 				break
 			}
 			catch [System.TimeoutException] {
@@ -456,7 +458,13 @@ function Install-Cert {
 		if ($WPEWasRunning -and -not(Get-Process fmscwpc -ErrorAction:Ignore)) {
 			<# NOTE: this will only work as expected from 64 bit PowerShell since Get-Process only lists processes running the same bit depth as PowerShell #>
 			Write-Output "start WPE because it was running before FMS was stopped, but isn't now:"
-			Invoke-FMSAdmin start, wpe
+			try { Invoke-FMSAdmin start, wpe }
+			catch {
+				if ($_.Exception.Message.StartsWith("fmsadmin") -and ($_.Exception.Data.ExitCode) -eq 10006) {
+					Write-Output "(If there is a delay in WPE starting, error 10006 is expected"
+					break
+				} else { throw }
+			}
 			Write-Output "done starting WPE"
 		}
 		if ($FilesWereOpen) {
