@@ -6,7 +6,7 @@
 	Author:      Daniel Smith dan@filemaker.consulting
 	Contributor: Nick Roemer stomp@stompsucks.com
 	Revised:     2024-JUL-29
-	Version:     2.1.2
+	Version:     2.1.3
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -134,6 +134,7 @@ Param(
 		production certificate.
 		Include the Force parameter to also restart FileMaker Server, which is a more complete test.
 	#>
+	[Parameter(ParameterSetName='InstallDependencies')]
 	[Parameter(ParameterSetName='Setup')]
 	[Parameter(ParameterSetName='InstallCertificate')]
 	[Parameter(ParameterSetName='ScheduleTask')]
