@@ -5,8 +5,8 @@
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
 	Contributor: Nick Roemer stomp@stompsucks.com
-	Revised:     2024-JUL-29
-	Version:     2.1.3
+	Revised:     2024-SEP-18
+	Version:     2.2.0
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -151,7 +151,18 @@ Param(
 	[Parameter(ParameterSetName='InstallCertificate')]
 	[Parameter(ParameterSetName='ScheduleTask')]
 	[Parameter(ParameterSetName='Renew')]
-	[switch] $Force
+	[switch] $Force,
+
+	<#
+		Add a Firewall rule to allow inbound connections on port 80 while waiting for validation,
+		then will modify it to block port 80.
+	#>
+	[Parameter(ParameterSetName='InstallDependencies')]
+	[Parameter(ParameterSetName='Setup')]
+	[Parameter(ParameterSetName='InstallCertificate')]
+	[Parameter(ParameterSetName='ScheduleTask')]
+	[Parameter(ParameterSetName='Renew')]
+	[switch] $ModifyFirewall
 )
 
 <# Exit immediately on error #>
@@ -668,6 +679,20 @@ function New-Cert {
 		$body | Out-File -Encoding ascii -FilePath $path
 	}
 
+	if ($ModifyFirewall) {
+		$firewallRule = Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction Ignore
+		if (-not $firewallRule) {
+			Write-Output "creating firewall rule to allow port 80"
+			$firewallRule = New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -LocalPort 80 -RemotePort 80 -Protocol TCP -Action Allow
+		} elseif ($firewallRule.Action -ne "Allow") {
+			Write-Output "modifying firewall rule to allow port 80"
+			$firewallRule.Action = "Allow"
+			Set-NetFirewallRule -InputObject $firewallRule
+		} else {
+			Write-Output "firewall rule already allowed port 80, so it wasn't modified"
+		}
+	}
+
 	# Send all challenges at once
 	$auths.HTTP01Url | Send-ChallengeAck
 
@@ -711,6 +736,17 @@ function New-Cert {
 	}
 	Write-Output "done"
 	Write-Output ""
+
+	if ($ModifyFirewall) {
+		Write-Output "modifying firewall rule to block port 80"
+		$firewallRule.Action = "Block"
+		try {
+			Set-NetFirewallRule -InputObject $firewallRule
+		}
+		catch {
+			Write-Output "failed to modify firewall; this will be tried again at the end of the script"
+		}
+	}
 
 
 	Write-Output "Request Certificate _____________________________________________________________"
@@ -766,10 +802,11 @@ function Schedule-Task {
 	)) {
 		$StagingParameterAsText = if ($Staging) {"-Staging"}
 		$ForceParameterAsText = if ($Force) {"-Force"}
+		$ModifyFirewallAsText = if ($ModifyFirewall) {"-ModifyFirewall"}
 		$WebRootParameterAsText = if ($WebRoot) {"-WebRoot '" + $WebRoot + "'"}
 		$Action = New-ScheduledTaskAction `
 			-Execute powershell.exe `
-			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText $ForceParameterAsText $WebRootParameterAsText -Confirm:0"""
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""& '$PSCommandPath' -Renew $StagingParameterAsText $ForceParameterAsText $ModifyFirewallAsText $WebRootParameterAsText -Confirm:0"""
 
 		$Trigger = New-ScheduledTaskTrigger `
 			-Daily `
@@ -853,6 +890,7 @@ Try {
 	[switch] $Logging = -not $host.name.contains('ISE')
 	[string] $LogDirectory = Join-Path $FMSPath ('Data\Documents\' + (Split-Path $PSCommandPath -Leaf))
 	[string] $fmsadmin = Join-Path $FMSPath 'Database Server\fmsadmin.exe' | Convert-Path
+	[string] $firewallRuleName = "GetSSL Port 80"
 	$externalAuth = '' # declare as script-level variable
 	$userAndPassParamString = '' # declare as script-level variable (set user/pass here if you want to hard-code it in your script)
 
@@ -945,7 +983,7 @@ Try {
 
 				if (Test-IsInteractiveShell) {
 					# just call the script again to schedule a task; it will ask user if they want to proceed
-					& $PSCommandPath -ScheduleTask -Staging:$Staging -Force:$Force
+					& $PSCommandPath -ScheduleTask -Staging:$Staging -Force:$Force -ModifyFirewall:$ModifyFirewall
 				}
 			}
 
@@ -988,8 +1026,9 @@ Try {
 
 		'ScheduleTask' {
 			Write-Output "ScheduleTask..."
-			Write-Output "  Staging:      $Staging"
-			Write-Output "  Force:        $Force"
+			Write-Output "  Staging:        $Staging"
+			Write-Output "  Force:          $Force"
+			Write-Output "  ModifyFirewall: $ModifyFirewall"
 			Write-Output ""
 			Schedule-Task
 			
@@ -1097,6 +1136,21 @@ Catch {
 }
 
 Finally {
+	if ($ModifyFirewall) {
+		# This should already be done, but I prefer to double check
+		$firewallRule = Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction Ignore
+		if ($firewallRule -and $firewallRule.Action -ne "Block") {
+			Write-Output "modifying firewall rule to block port 80"
+			try {
+				$firewallRule.Action = "Block"
+				Set-NetFirewallRule -InputObject $firewallRule
+			}
+			catch {
+				Write-Output "WARNING: Firewall could not be set to block port 80, you should manually modify the firewall rule named: $firewallRuleName."
+			}
+		}
+	}
+
 	if ($mustStartServer) {
 		Write-Output "mustStartServer was still true in Finally block, so try to start it..."
 		if ((Get-Service "FileMaker Server").Status  -ne "Running") {
