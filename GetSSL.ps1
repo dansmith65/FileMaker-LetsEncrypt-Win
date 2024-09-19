@@ -1136,7 +1136,7 @@ Catch {
 }
 
 Finally {
-	if ($ModifyFirewall) {
+	if ($ModifyFirewall -and $firewallRuleName) {
 		# This should already be done, but I prefer to double check
 		$firewallRule = Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction Ignore
 		if ($firewallRule -and $firewallRule.Action -ne "Block") {
