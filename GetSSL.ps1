@@ -5,8 +5,8 @@
 .NOTES
 	Author:      Daniel Smith dan@filemaker.consulting
 	Contributor: Nick Roemer stomp@stompsucks.com
-	Revised:     2024-SEP-18
-	Version:     2.2.0
+	Revised:     2024-SEP-19
+	Version:     2.2.1
 
 .LINK
 	https://github.com/dansmith65/FileMaker-LetsEncrypt-Win
@@ -154,8 +154,10 @@ Param(
 	[switch] $Force,
 
 	<#
-		Add a Firewall rule to allow inbound connections on port 80 while waiting for validation,
-		then will modify it to block port 80.
+		Add a Firewall rule named "GetSSL Port 80" to allow inbound connections on port 80 while
+		waiting for validation, then modify it to block port 80 at all other times.
+		Once created, this script will not change the firewall rule other than the allow/block
+		state, so any changes you make to the rule yourself will persist.
 	#>
 	[Parameter(ParameterSetName='InstallDependencies')]
 	[Parameter(ParameterSetName='Setup')]
@@ -682,10 +684,10 @@ function New-Cert {
 	if ($ModifyFirewall) {
 		$firewallRule = Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction Ignore
 		if (-not $firewallRule) {
-			Write-Output "creating firewall rule to allow port 80"
+			Write-Output "create firewall rule to allow port 80"
 			$firewallRule = New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -LocalPort 80 -RemotePort 80 -Protocol TCP -Action Allow
 		} elseif ($firewallRule.Action -ne "Allow") {
-			Write-Output "modifying firewall rule to allow port 80"
+			Write-Output "modify firewall rule to allow port 80"
 			$firewallRule.Action = "Allow"
 			Set-NetFirewallRule -InputObject $firewallRule
 		} else {
@@ -734,11 +736,9 @@ function New-Cert {
 		($order | Format-List | Out-String).Trim()
 		throw ("order wasn't ready or valid, but should have been at this point in the script")
 	}
-	Write-Output "done"
-	Write-Output ""
 
 	if ($ModifyFirewall) {
-		Write-Output "modifying firewall rule to block port 80"
+		Write-Output "modify firewall rule to block port 80"
 		$firewallRule.Action = "Block"
 		try {
 			Set-NetFirewallRule -InputObject $firewallRule
@@ -747,6 +747,9 @@ function New-Cert {
 			Write-Output "failed to modify firewall; this will be tried again at the end of the script"
 		}
 	}
+
+	Write-Output "done"
+	Write-Output ""
 
 
 	Write-Output "Request Certificate _____________________________________________________________"
@@ -943,10 +946,11 @@ Try {
 		}
 		
 		{$_ -in 'Setup','Renew'} {
-			Write-Output "  domains:      $($Domains -join ', ')"
-			Write-Output "  emails:       $($Emails -join ', ')"
-			Write-Output "  Staging:      $Staging"
-			Write-Output "  Force:        $Force"
+			Write-Output "  domains:        $($Domains -join ', ')"
+			Write-Output "  emails:         $($Emails -join ', ')"
+			Write-Output "  Staging:        $Staging"
+			Write-Output "  Force:          $Force"
+			Write-Output "  ModifyFirewall: $ModifyFirewall"
 			Write-Output ""
 
 			if ($Staging -and $Force) {
@@ -1117,7 +1121,7 @@ Try {
 				"Setup and install a certificate now?",
 				"Setup?"
 			)) {
-				& $PSCommandPath -Setup -Staging:$Staging -Force:$Force
+				& $PSCommandPath -Setup -Staging:$Staging -Force:$Force -ModifyFirewall:$ModifyFirewall
 			} else {
 				Write-Output "When ready, you can setup and install a certificate:"
 				Write-Output "  .'$PSCommandPath' -Setup"
@@ -1140,7 +1144,7 @@ Finally {
 		# This should already be done, but I prefer to double check
 		$firewallRule = Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction Ignore
 		if ($firewallRule -and $firewallRule.Action -ne "Block") {
-			Write-Output "modifying firewall rule to block port 80"
+			Write-Output "modify firewall rule to block port 80"
 			try {
 				$firewallRule.Action = "Block"
 				Set-NetFirewallRule -InputObject $firewallRule
