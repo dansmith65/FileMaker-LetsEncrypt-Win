@@ -1,10 +1,10 @@
 ## Notes
 
-* Only supports Windows Server 2016+.
+* Your server **must** must be available to the internet on port 80 from your domain. If you can't access your FileMaker server's landing page in a browser, this script will fail. See documentation on `-ModifyFirewall` parameter if you want port 80 to be normally closed.
+* Supports Windows Server 2016+.
 * Tested on FileMaker Server 17, 18, 19, 20, and 21.
 * Installs all dependencies for you.
 * If you use this script in production, you should watch this repo in GitHub so you get a notification when it's updated.
-
 
 
 ## Installation and Quick Setup
@@ -109,6 +109,14 @@ Examples in this section will use a shortened syntax and assumes you will set ex
 
    ```powershell
    .\GetSSL.ps1 -WebRoot '\\web-server\C$\inetpub\wwwroot'
+   ```
+
+9. Block port 80 via Windows Firewall
+
+   While port 80 **must** be open for the validation to work; it only has to be open long enough for the Let's Encrypt server's to do that validation, which was a few seconds in my tests. This script can manage that for you if you add the `-ModifyFirewall` parameter.
+
+   ```powershell
+   .\GetSSL.ps1 -ModifyFirewall
    ```
 
 
