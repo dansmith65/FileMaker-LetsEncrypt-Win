@@ -1,11 +1,3 @@
-## Credit
-
-This is a fork of the work started by: [David Nahodyl, Blue Feather](http://bluefeathergroup.com/blog/how-to-use-lets-encrypt-ssl-certificates-with-filemaker-server/)  
-
-Thanks for figuring out the hard part David!
-
-
-
 ## Notes
 
 * Only supports Windows Server 2016+.
