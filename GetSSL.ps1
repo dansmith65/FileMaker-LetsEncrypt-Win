@@ -935,7 +935,11 @@ Try {
 			if (! $account) {
 				throw "No ACME account configured. Run Setup first."
 			}
-			$Emails = ($account.contact).Replace('mailto:','')
+			if ($account.contact) {
+				$Emails = ($account.contact).Replace('mailto:','')
+			} else {
+				$Emails = ""
+			}
 			
 			# get Domains from Get-PAOrder
 			$order = Get-PAOrder -Refresh
